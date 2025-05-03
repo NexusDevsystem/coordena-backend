@@ -1,4 +1,3 @@
-// backend/src/index.js
 import express from 'express'
 import mongoose from 'mongoose'
 import cors from 'cors'
@@ -15,6 +14,15 @@ mongoose
   .connect(MONGO_URI, { dbName: 'Coordena+' })
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Falha na conexão com MongoDB:', err))
+
+// Middlewares
+app.use(cors())
+app.use(express.json()) // Parse JSON bodies
+
+// Rota raiz só pra healthcheck
+app.get('/', (_req, res) => {
+  res.send('🟢 API Coordena+ rodando!')
+})
 
 // Define esquema e modelo de Reserva
 const reservaSchema = new mongoose.Schema({
@@ -33,10 +41,6 @@ const reservaSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 const Reserva = mongoose.model('Reserva', reservaSchema)
-
-// Middlewares
-app.use(cors())
-app.use(express.json()) // Parse JSON bodies
 
 // Rotas CRUD
 
