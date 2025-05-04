@@ -1,7 +1,11 @@
+// backend/src/index.js
+
 import express from 'express'
 import mongoose from 'mongoose'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import authRoutes from './routes/auth.js'
+import protect   from './middleware/authMiddleware.js'
 
 dotenv.config()
 
@@ -19,11 +23,18 @@ mongoose
 app.use(cors())
 app.use(express.json()) // Parse JSON bodies
 
+// Rotas de autenticação (register, login...) — sem proteção
+app.use('/api/auth', authRoutes)
+
+// A partir daqui tudo em /api/reservas ficará protegido pelo seu JWT middleware
+app.use('/api/reservas', protect)
+
 // Rota raiz só pra healthcheck
 app.get('/', (_req, res) => {
   res.send('🟢 API Coordena+ rodando!')
 })
 
+// --- Seu esquema e rotas inline de Reserva continuam iguais abaixo ---
 // Define esquema e modelo de Reserva
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
@@ -41,8 +52,6 @@ const reservaSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 const Reserva = mongoose.model('Reserva', reservaSchema)
-
-// Rotas CRUD
 
 // Listar todas as reservas (GET /api/reservas)
 app.get('/api/reservas', async (_req, res) => {
@@ -70,7 +79,7 @@ app.post('/api/reservas', async (req, res) => {
   }
 })
 
-// Atualizar reserva existente (PUT /api/reservas/:id)
+// Atualizar reserva (PUT /api/reservas/:id)
 app.put('/api/reservas/:id', async (req, res) => {
   console.log('▶️  PUT /api/reservas/:id', req.params.id, 'body =', req.body)
   try {
@@ -91,7 +100,7 @@ app.put('/api/reservas/:id', async (req, res) => {
   }
 })
 
-// Deletar uma reserva (DELETE /api/reservas/:id)
+// Deletar reserva (DELETE /api/reservas/:id)
 app.delete('/api/reservas/:id', async (req, res) => {
   console.log('▶️  DELETE /api/reservas/:id', req.params.id)
   try {
