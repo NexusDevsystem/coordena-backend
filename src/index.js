@@ -5,22 +5,32 @@ import mongoose from 'mongoose'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
-import protect   from './middleware/authMiddleware.js'
+import protect from './middleware/authMiddleware.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 4000
 const MONGO_URI = process.env.MONGO_URI
+// Defina em .env: FRONTEND_URL=https://coordena-frontend.vercel.app
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
 
-// Conecta no MongoDB, usando o database "Coordena+"
+// Conecta ao MongoDB, usando o database "Coordena+"
 mongoose
   .connect(MONGO_URI, { dbName: 'Coordena+' })
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Falha na conexão com MongoDB:', err))
 
 // Middlewares
-app.use(cors())
+// Habilita CORS apenas para o front-end
+app.use(cors({
+  origin: FRONTEND_URL,
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  credentials: true
+}))
+// Para suportar preflight
+app.options('*', cors())
+
 app.use(express.json()) // Parse JSON bodies
 
 // Rotas de autenticação (register, login...) — sem proteção
@@ -34,8 +44,7 @@ app.get('/', (_req, res) => {
   res.send('🟢 API Coordena+ rodando!')
 })
 
-// --- Seu esquema e rotas inline de Reserva continuam iguais abaixo ---
-// Define esquema e modelo de Reserva
+// --- Esquema e rotas inline de Reserva continuam iguais abaixo ---
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },
