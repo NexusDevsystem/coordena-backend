@@ -1,55 +1,48 @@
 // backend/src/index.js
-
-import express from 'express'
+import express  from 'express'
 import mongoose from 'mongoose'
-import cors from 'cors'
-import dotenv from 'dotenv'
-import authRoutes from './routes/auth.js'
-import protect from './middleware/authMiddleware.js'
+import cors     from 'cors'
+import dotenv   from 'dotenv'
+
+import authRoutes  from './routes/auth.js'
+import protect     from './middleware/authMiddleware.js'
 
 dotenv.config()
 
-const app = express()
-const PORT = process.env.PORT || 10000
-const MONGO_URI = process.env.MONGO_URI
+const app          = express()
+const PORT         = process.env.PORT         || 10000
+const MONGO_URI    = process.env.MONGO_URI
+// **ATENÇÃO**: não deixe barra no final, nem espaço
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim()
 
 // conecta ao MongoDB
-mongoose
-  .connect(MONGO_URI, { dbName: 'Coordena+' })
+mongoose.connect(MONGO_URI, { dbName: 'Coordena+' })
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Erro no MongoDB:', err))
 
-// CORS dinâmico: só aceita o FRONTEND_URL ou localhost (para dev)
-/*
-  No .env defina:
-    FRONTEND_URL=https://coordena-frontend.vercel.app
-*/
+// CORS: só aceita exatamente o FRONTEND_URL ou localhost
 app.use(cors({
   origin: (origin, callback) => {
-    // sem origin (curl/postman) ou matches FRONTEND_URL ou localhost entra
-    if (!origin
-     || origin === FRONTEND_URL
-     || origin.includes('localhost')
+    if (!origin                       // curl / postman
+     || origin === FRONTEND_URL      // deploy certinho
+     || origin.includes('localhost') // ambiente dev
     ) {
-      console.log('✔️  CORS allow:', origin || 'no-origin')
       return callback(null, true)
     }
-    console.warn('⛔  CORS blocked:', origin)
+    console.warn('⛔ CORS BLOCKED:', origin)
     callback(new Error(`Bloqueado por CORS: ${origin}`))
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 }))
-app.options('*', cors())  // preflight
+app.options('*', cors()) // preflight
 
-// parse JSON bodies
 app.use(express.json())
 
-// rotas de autenticação (login, register)
+// rotas de auth (register / login)
 app.use('/api/auth', authRoutes)
 
-// rotas protegidas de reservas via JWT
+// rotas de reservas (JWT)
 app.use('/api/reservas', protect)
 
 // healthcheck
@@ -57,7 +50,7 @@ app.get('/', (_req, res) => {
   res.send(`🟢 API Coordena+ rodando na porta ${PORT}`)
 })
 
-// --- Modelo Reserva + CRUD inline ---
+// --- modelo Reserva e CRUD inline ---
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },

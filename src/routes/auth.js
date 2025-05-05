@@ -10,4 +10,5 @@ router.post('/register', registerUser)
 // POST /api/auth/login
 router.post('/login', loginUser)
 
+// **CERTIFIQUE-SE DE TER ISSO**:
 export default router
