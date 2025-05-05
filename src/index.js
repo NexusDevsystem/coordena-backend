@@ -1,18 +1,18 @@
 // backend/src/index.js
+
 import express from 'express'
 import mongoose from 'mongoose'
-import cors      from 'cors'
-import dotenv    from 'dotenv'
+import cors from 'cors'
+import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
-import protect   from './middleware/authMiddleware.js'
+import protect from './middleware/authMiddleware.js'
 
 dotenv.config()
 
 const app = express()
-const PORT      = process.env.PORT || 10000
+const PORT = process.env.PORT || 10000
 const MONGO_URI = process.env.MONGO_URI
-const FRONTEND_URL = (process.env.FRONTEND_URL || '')
-  .trim()
+const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim()
 
 // conecta ao MongoDB
 mongoose
@@ -20,10 +20,22 @@ mongoose
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Erro no MongoDB:', err))
 
-// CORS dinâmico: só aceita o FRONTEND_URL
+// CORS dinâmico: só aceita o FRONTEND_URL ou localhost (para dev)
+/*
+  No .env defina:
+    FRONTEND_URL=https://coordena-frontend.vercel.app
+*/
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin === FRONTEND_URL) return callback(null, true)
+    // sem origin (curl/postman) ou matches FRONTEND_URL ou localhost entra
+    if (!origin
+     || origin === FRONTEND_URL
+     || origin.includes('localhost')
+    ) {
+      console.log('✔️  CORS allow:', origin || 'no-origin')
+      return callback(null, true)
+    }
+    console.warn('⛔  CORS blocked:', origin)
     callback(new Error(`Bloqueado por CORS: ${origin}`))
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
@@ -31,11 +43,13 @@ app.use(cors({
 }))
 app.options('*', cors())  // preflight
 
+// parse JSON bodies
 app.use(express.json())
 
-// rotas de autenticação
+// rotas de autenticação (login, register)
 app.use('/api/auth', authRoutes)
-// rotas de reserva protegidas
+
+// rotas protegidas de reservas via JWT
 app.use('/api/reservas', protect)
 
 // healthcheck
@@ -43,7 +57,7 @@ app.get('/', (_req, res) => {
   res.send(`🟢 API Coordena+ rodando na porta ${PORT}`)
 })
 
-// --- modelo Reserva + CRUD inline (igual ao seu atual) ---
+// --- Modelo Reserva + CRUD inline ---
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },
