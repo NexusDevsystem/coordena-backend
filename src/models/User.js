@@ -1,27 +1,12 @@
-// backend/src/models/user.js
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 
 const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, 'Nome é obrigatório']
-  },
-  email: {
-    type: String,
-    required: [true, 'E‑mail é obrigatório'],
-    unique: true,
-    match: [/.+\@.+\..+/, 'E‑mail inválido']
-  },
-  password: {
-    type: String,
-    required: [true, 'Senha é obrigatória'],
-    minlength: [6, 'A senha precisa ter ao menos 6 caracteres'],
-    select: false // não retorna a senha por padrão nas queries
-  }
+  name:     { type: String, required: true },
+  email:    { type: String, required: true, unique: true },
+  password: { type: String, required: true, select: false }
 }, { timestamps: true })
 
-// antes de salvar, hash da senha
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next()
   const salt = await bcrypt.genSalt(10)
@@ -29,9 +14,8 @@ userSchema.pre('save', async function(next) {
   next()
 })
 
-// método para comparar senha
-userSchema.methods.matchPassword = function(plain) {
-  return bcrypt.compare(plain, this.password)
+userSchema.methods.matchPassword = function(entered) {
+  return bcrypt.compare(entered, this.password)
 }
 
 export default mongoose.model('User', userSchema)
