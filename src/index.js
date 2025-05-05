@@ -13,10 +13,11 @@ const app = express()
 // Usa a porta 10000 por padrão se PORT não for definida
 const PORT = process.env.PORT || 10000
 const MONGO_URI = process.env.MONGO_URI
-// Defina em .env:
-// FRONTEND_URL=https://coordena-frontend.vercel.app
-// Para testes locais, pode usar: FRONTEND_URL=http://localhost:10000
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:10000'
+// FRONTEND_URL deve estar em .env sem aspas
+// Exemplo .env:
+//   FRONTEND_URL=https://coordena-frontend.vercel.app
+//   (para testes locais, pode usar http://localhost:10000)
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:10000').trim()
 
 // Conecta ao MongoDB, usando o database "Coordena+"
 mongoose
@@ -27,7 +28,13 @@ mongoose
 // Middlewares
 // Habilita CORS apenas para o front-end configurado
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: (origin, callback) => {
+    // permite também requisições sem origin (curl, Postman)
+    if (!origin || origin === FRONTEND_URL) {
+      return callback(null, true)
+    }
+    callback(new Error(`Bloqueado por CORS: ${origin}`))
+  },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 }))
@@ -44,7 +51,7 @@ app.use('/api/reservas', protect)
 
 // Healthcheck endpoint
 app.get('/', (_req, res) => {
-  res.send('🟢 API Coordena+ rodando na porta ' + PORT)
+  res.send(`🟢 API Coordena+ rodando na porta ${PORT}`)
 })
 
 // --- Modelo Reserva ---
@@ -80,8 +87,7 @@ app.get('/api/reservas', async (_req, res) => {
 app.post('/api/reservas', async (req, res) => {
   console.log('▶️  POST /api/reservas body =', req.body)
   try {
-    const nova = new Reserva(req.body)
-    const saved = await nova.save()
+    const saved = await new Reserva(req.body).save()
     console.log('✅ SALVO NO MONGO:', saved)
     res.status(201).json(saved)
   } catch (err) {
@@ -93,11 +99,7 @@ app.post('/api/reservas', async (req, res) => {
 app.put('/api/reservas/:id', async (req, res) => {
   console.log('▶️  PUT /api/reservas/:id', req.params.id, 'body =', req.body)
   try {
-    const updated = await Reserva.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    )
+    const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true })
     if (!updated) {
       return res.status(404).json({ error: 'Reserva não encontrada' })
     }
