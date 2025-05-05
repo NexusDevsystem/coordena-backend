@@ -10,10 +10,13 @@ import protect from './middleware/authMiddleware.js'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 4000
+// Usa a porta 10000 por padrão se PORT não for definida
+const PORT = process.env.PORT || 10000
 const MONGO_URI = process.env.MONGO_URI
-// Defina em .env: FRONTEND_URL=https://coordena-frontend.vercel.app
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+// Defina em .env:
+// FRONTEND_URL=https://coordena-frontend.vercel.app
+// Para testes locais, pode usar: FRONTEND_URL=http://localhost:10000
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:10000'
 
 // Conecta ao MongoDB, usando o database "Coordena+"
 mongoose
@@ -22,29 +25,29 @@ mongoose
   .catch(err => console.error('❌ Falha na conexão com MongoDB:', err))
 
 // Middlewares
-// Habilita CORS apenas para o front-end
+// Habilita CORS apenas para o front-end configurado
 app.use(cors({
   origin: FRONTEND_URL,
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 }))
-// Para suportar preflight
+// Suporta requisições preflight
 app.options('*', cors())
 
 app.use(express.json()) // Parse JSON bodies
 
-// Rotas de autenticação (register, login...) — sem proteção
+// Rotas de autenticação (register, login...)
 app.use('/api/auth', authRoutes)
 
-// A partir daqui tudo em /api/reservas ficará protegido pelo seu JWT middleware
+// Rotas protegidas de reservas via JWT middleware
 app.use('/api/reservas', protect)
 
-// Rota raiz só pra healthcheck
+// Healthcheck endpoint
 app.get('/', (_req, res) => {
-  res.send('🟢 API Coordena+ rodando!')
+  res.send('🟢 API Coordena+ rodando na porta ' + PORT)
 })
 
-// --- Esquema e rotas inline de Reserva continuam iguais abaixo ---
+// --- Modelo Reserva ---
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },
@@ -62,7 +65,7 @@ const reservaSchema = new mongoose.Schema({
 
 const Reserva = mongoose.model('Reserva', reservaSchema)
 
-// Listar todas as reservas (GET /api/reservas)
+// CRUD Reservas
 app.get('/api/reservas', async (_req, res) => {
   try {
     const all = await Reserva.find().sort({ date: 1, start: 1 })
@@ -74,7 +77,6 @@ app.get('/api/reservas', async (_req, res) => {
   }
 })
 
-// Criar nova reserva (POST /api/reservas)
 app.post('/api/reservas', async (req, res) => {
   console.log('▶️  POST /api/reservas body =', req.body)
   try {
@@ -88,7 +90,6 @@ app.post('/api/reservas', async (req, res) => {
   }
 })
 
-// Atualizar reserva (PUT /api/reservas/:id)
 app.put('/api/reservas/:id', async (req, res) => {
   console.log('▶️  PUT /api/reservas/:id', req.params.id, 'body =', req.body)
   try {
@@ -98,7 +99,6 @@ app.put('/api/reservas/:id', async (req, res) => {
       { new: true }
     )
     if (!updated) {
-      console.warn('⚠️  Reserva não encontrada para update:', req.params.id)
       return res.status(404).json({ error: 'Reserva não encontrada' })
     }
     console.log('✅ ATUALIZADO NO MONGO:', updated)
@@ -109,13 +109,11 @@ app.put('/api/reservas/:id', async (req, res) => {
   }
 })
 
-// Deletar reserva (DELETE /api/reservas/:id)
 app.delete('/api/reservas/:id', async (req, res) => {
   console.log('▶️  DELETE /api/reservas/:id', req.params.id)
   try {
     const deleted = await Reserva.findByIdAndDelete(req.params.id)
     if (!deleted) {
-      console.warn('⚠️  Reserva não encontrada para delete:', req.params.id)
       return res.status(404).json({ error: 'Reserva não encontrada' })
     }
     console.log('✅ REMOVIDA DO MONGO:', req.params.id)
@@ -126,7 +124,7 @@ app.delete('/api/reservas/:id', async (req, res) => {
   }
 })
 
-// Inicia o servidor
+// Inicia o servidor na porta configurada
 app.listen(PORT, () => {
   console.log(`🚀 Servidor ouvindo na porta ${PORT}`)
 })
