@@ -1,3 +1,4 @@
+// backend/src/controllers/authController.js
 import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
 
@@ -6,15 +7,15 @@ const generateToken = (id, role) =>
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body
-    if (!name || !email || !password)
+    const { name, email, password, role } = req.body
+    if (!name || !email || !password || !role)
       return res.status(400).json({ message: 'Preencha todos os campos' })
 
     const exists = await User.findOne({ email })
     if (exists)
       return res.status(400).json({ message: 'Usuário já existe' })
 
-    const user = await User.create({ name, email, password })
+    const user = await User.create({ name, email, password, role })
     if (!user) throw new Error('Falha ao criar usuário')
 
     return res.status(201).json({
