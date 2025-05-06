@@ -1,9 +1,14 @@
+// backend/src/index.js
+
 import express from 'express'
 import mongoose from 'mongoose'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
-import protect from './middleware/authMiddleware.js'
+
+// ajuste aqui: import named protect em vez de default
+import { protect } from './middleware/authMiddleware.js'
+// authorize continua como default export
 import authorize from './middleware/authorize.js'
 
 dotenv.config()
@@ -43,9 +48,7 @@ app.use(express.json())
 // rotas de autenticação (login, register)
 app.use('/api/auth', authRoutes)
 
-// rotas protegidas de reservas via JWT
-// leitura liberada a qualquer usuário autenticado
-// criação/edição/exclusão liberada apenas a professor e admin
+// esquema Mongoose de reservas
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },
@@ -63,6 +66,7 @@ const reservaSchema = new mongoose.Schema({
 
 const Reserva = mongoose.model('Reserva', reservaSchema)
 
+// GET → qualquer usuário autenticado
 app.get('/api/reservas', protect, async (_req, res) => {
   try {
     const all = await Reserva.find().sort({ date: 1, start: 1 })
@@ -72,6 +76,7 @@ app.get('/api/reservas', protect, async (_req, res) => {
   }
 })
 
+// POST → apenas professor e admin
 app.post(
   '/api/reservas',
   protect,
@@ -86,13 +91,18 @@ app.post(
   }
 )
 
+// PUT → apenas professor e admin
 app.put(
   '/api/reservas/:id',
   protect,
   authorize('professor','admin'),
   async (req, res) => {
     try {
-      const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true })
+      const updated = await Reserva.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true }
+      )
       if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' })
       res.json(updated)
     } catch (err) {
@@ -101,6 +111,7 @@ app.put(
   }
 )
 
+// DELETE → apenas professor e admin
 app.delete(
   '/api/reservas/:id',
   protect,
