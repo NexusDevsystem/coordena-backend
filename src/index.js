@@ -1,56 +1,51 @@
-// backend/src/index.js
-import express  from 'express'
+import express from 'express'
 import mongoose from 'mongoose'
-import cors     from 'cors'
-import dotenv   from 'dotenv'
-
-import authRoutes  from './routes/auth.js'
-import protect     from './middleware/authMiddleware.js'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import authRoutes from './routes/auth.js'
+import protect from './middleware/authMiddleware.js'
+import authorize from './middleware/authorize.js'
 
 dotenv.config()
 
-const app          = express()
-const PORT         = process.env.PORT         || 10000
-const MONGO_URI    = process.env.MONGO_URI
-// **ATENÇÃO**: não deixe barra no final, nem espaço
+const app = express()
+const PORT = process.env.PORT || 10000
+const MONGO_URI = process.env.MONGO_URI
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim()
 
 // conecta ao MongoDB
-mongoose.connect(MONGO_URI, { dbName: 'Coordena+' })
+mongoose
+  .connect(MONGO_URI, { dbName: 'Coordena+' })
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Erro no MongoDB:', err))
 
-// CORS: só aceita exatamente o FRONTEND_URL ou localhost
+// CORS dinâmico: só aceita o FRONTEND_URL ou localhost (para dev)
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin                       // curl / postman
-     || origin === FRONTEND_URL      // deploy certinho
-     || origin.includes('localhost') // ambiente dev
+    if (
+      !origin ||
+      origin === FRONTEND_URL ||
+      origin.includes('localhost')
     ) {
+      console.log('✔️  CORS allow:', origin || 'no-origin')
       return callback(null, true)
     }
-    console.warn('⛔ CORS BLOCKED:', origin)
+    console.warn('⛔  CORS blocked:', origin)
     callback(new Error(`Bloqueado por CORS: ${origin}`))
   },
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   credentials: true
 }))
-app.options('*', cors()) // preflight
+app.options('*', cors())  // preflight
 
 app.use(express.json())
 
-// rotas de auth (register / login)
+// rotas de autenticação (login, register)
 app.use('/api/auth', authRoutes)
 
-// rotas de reservas (JWT)
-app.use('/api/reservas', protect)
-
-// healthcheck
-app.get('/', (_req, res) => {
-  res.send(`🟢 API Coordena+ rodando na porta ${PORT}`)
-})
-
-// --- modelo Reserva e CRUD inline ---
+// rotas protegidas de reservas via JWT
+// leitura liberada a qualquer usuário autenticado
+// criação/edição/exclusão liberada apenas a professor e admin
 const reservaSchema = new mongoose.Schema({
   date:        { type: String, required: true },
   start:       { type: String, required: true },
@@ -68,7 +63,7 @@ const reservaSchema = new mongoose.Schema({
 
 const Reserva = mongoose.model('Reserva', reservaSchema)
 
-app.get('/api/reservas', async (_req, res) => {
+app.get('/api/reservas', protect, async (_req, res) => {
   try {
     const all = await Reserva.find().sort({ date: 1, start: 1 })
     res.json(all)
@@ -77,33 +72,53 @@ app.get('/api/reservas', async (_req, res) => {
   }
 })
 
-app.post('/api/reservas', async (req, res) => {
-  try {
-    const saved = await new Reserva(req.body).save()
-    res.status(201).json(saved)
-  } catch (err) {
-    res.status(400).json({ error: 'Erro ao criar reserva', details: err.message })
+app.post(
+  '/api/reservas',
+  protect,
+  authorize('professor','admin'),
+  async (req, res) => {
+    try {
+      const saved = await new Reserva(req.body).save()
+      res.status(201).json(saved)
+    } catch (err) {
+      res.status(400).json({ error: 'Erro ao criar reserva', details: err.message })
+    }
   }
-})
+)
 
-app.put('/api/reservas/:id', async (req, res) => {
-  try {
-    const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true })
-    if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' })
-    res.json(updated)
-  } catch (err) {
-    res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message })
+app.put(
+  '/api/reservas/:id',
+  protect,
+  authorize('professor','admin'),
+  async (req, res) => {
+    try {
+      const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true })
+      if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' })
+      res.json(updated)
+    } catch (err) {
+      res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message })
+    }
   }
-})
+)
 
-app.delete('/api/reservas/:id', async (req, res) => {
-  try {
-    const deleted = await Reserva.findByIdAndDelete(req.params.id)
-    if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' })
-    res.json({ message: 'Reserva removida com sucesso' })
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message })
+app.delete(
+  '/api/reservas/:id',
+  protect,
+  authorize('professor','admin'),
+  async (req, res) => {
+    try {
+      const deleted = await Reserva.findByIdAndDelete(req.params.id)
+      if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' })
+      res.json({ message: 'Reserva removida com sucesso' })
+    } catch (err) {
+      res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message })
+    }
   }
+)
+
+// healthcheck
+app.get('/', (_req, res) => {
+  res.send(`🟢 API Coordena+ rodando na porta ${PORT}`)
 })
 
 // inicia servidor

@@ -1,9 +1,8 @@
-// backend/src/controllers/authController.js
 import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
 
-const generateToken = id =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' })
+const generateToken = (id, role) =>
+  jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' })
 
 export const registerUser = async (req, res) => {
   try {
@@ -22,7 +21,8 @@ export const registerUser = async (req, res) => {
       _id:   user._id,
       name:  user.name,
       email: user.email,
-      token: generateToken(user._id)
+      role:  user.role,
+      token: generateToken(user._id, user.role)
     })
   } catch (err) {
     console.error('🔥 registerUser error:', err)
@@ -44,7 +44,8 @@ export const loginUser = async (req, res) => {
       _id:   user._id,
       name:  user.name,
       email: user.email,
-      token: generateToken(user._id)
+      role:  user.role,
+      token: generateToken(user._id, user.role)
     })
   } catch (err) {
     console.error('🔥 loginUser error:', err)
