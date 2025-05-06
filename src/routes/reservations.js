@@ -1,9 +1,20 @@
-const router = require('express').Router();
-const ctrl   = require('../controllers/reservationCtrl');
+// backend/src/routes/reservas.js
+import express from 'express'
+import {
+  getAll, createReserva, updateReserva, deleteReserva
+} from '../controllers/reservaController.js'
+import { protect, authorizeProfessor } from '../middleware/auth.js'
 
-router.get('/',    ctrl.getReservations);
-router.post('/',   ctrl.createReservation);
-router.put('/:id', ctrl.updateReservation);
-router.delete('/:id', ctrl.deleteReservation);
+const router = express.Router()
 
-module.exports = router;
+router
+  .route('/')
+  .get(protect, getAll)
+  .post(protect, authorizeProfessor, createReserva)
+
+router
+  .route('/:id')
+  .put(protect, authorizeProfessor, updateReserva)
+  .delete(protect, authorizeProfessor, deleteReserva)
+
+export default router
