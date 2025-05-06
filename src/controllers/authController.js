@@ -37,7 +37,7 @@ export const loginUser = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: 'Preencha todos os campos' })
 
-    const user = await User.findOne({ email }).select('+password')
+    const user = await User.findOne({ email }).select('+password +role')
     if (!user || !(await user.matchPassword(password)))
       return res.status(401).json({ message: 'E-mail ou senha incorretos' })
 
