@@ -5,14 +5,13 @@ import bcrypt from 'bcryptjs';
 
 const router = Router();
 
-// Regex institucional
+// Regex institucional Estácio
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     let { name, email, password, role } = req.body;
-    // Normaliza
     email = email.trim().toLowerCase();
 
     // Validação de domínio
@@ -22,44 +21,33 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Confere se usuário já existe
+    // Checa existência
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({ error: 'Usuário já registrado.' });
     }
 
-    // Hash de senha
+    // Hash da senha
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
 
     // Cria usuário
-    const user = await User.create({
-      name,
-      email,
-      password: hashed,
-      role
-    });
+    const user = await User.create({ name, email, password: hashed, role });
 
-    // Gera token JWT
+    // Gera JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    // Retorna dados e token
-    res.status(201).json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
+    return res.status(201).json({
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
       token
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao registrar usuário.' });
+    return res.status(500).json({ error: 'Erro ao registrar usuário.' });
   }
 });
 
@@ -82,7 +70,7 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // Confere senha
+    // Verifica senha
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Senha incorreta.' });
@@ -94,11 +82,10 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
-
-    res.json({ token });
+    return res.json({ token });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro no login.' });
+    return res.status(500).json({ error: 'Erro no login.' });
   }
 });
 
