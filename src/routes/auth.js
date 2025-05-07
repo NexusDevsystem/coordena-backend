@@ -1,92 +1,39 @@
-import { Router } from 'express';
-import User from '../models/User.js';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+const API_URL = 'https://coordena-backend.onrender.com/api/auth';
 
-const router = Router();
+async function login(email, password) {
+  const res = await fetch(`${API_URL}/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',   // ← ESSENCIAL
+    },
+    body: JSON.stringify({ email, password })
+  });
 
-// Regex institucional Estácio
-const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
-
-// POST /api/auth/register
-router.post('/register', async (req, res) => {
-  try {
-    let { name, email, password, role } = req.body;
-    email = email.trim().toLowerCase();
-
-    // Validação de domínio
-    if (!estacioRegex.test(email)) {
-      return res.status(400).json({
-        error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
-      });
-    }
-
-    // Checa existência
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: 'Usuário já registrado.' });
-    }
-
-    // Hash da senha
-    const salt = await bcrypt.genSalt(10);
-    const hashed = await bcrypt.hash(password, salt);
-
-    // Cria usuário
-    const user = await User.create({ name, email, password: hashed, role });
-
-    // Gera JWT
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-
-    return res.status(201).json({
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
-      token
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Erro ao registrar usuário.' });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Credenciais inválidas');
   }
-});
 
-// POST /api/auth/login
-router.post('/login', async (req, res) => {
-  try {
-    let { email, password } = req.body;
-    email = email.trim().toLowerCase();
+  localStorage.setItem('token', data.token);
+  return data;
+}
 
-    // Validação de domínio
-    if (!estacioRegex.test(email)) {
-      return res.status(400).json({
-        error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
-      });
-    }
+async function register({ name, email, password, role }) {
+  const res = await fetch(`${API_URL}/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, email, password, role })
+  });
 
-    // Busca usuário
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
-
-    // Verifica senha
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: 'Senha incorreta.' });
-    }
-
-    // Gera token
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-    return res.json({ token });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Erro no login.' });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Erro ao registrar');
   }
-});
 
-export default router;
+  localStorage.setItem('token', data.token);
+  return data;
+}
+
+export const Auth = { login, register };
