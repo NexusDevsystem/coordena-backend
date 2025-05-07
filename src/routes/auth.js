@@ -1,36 +1,105 @@
-// src/routes/auth.js
 import { Router } from 'express';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
-// (importe também bcrypt ou outros que use)
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
 // Regex institucional
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
-router.post('/login', async (req, res) => {
-  let email = req.body.email.trim().toLowerCase();
-  const { password } = req.body;
+// POST /api/auth/register
+router.post('/register', async (req, res) => {
+  try {
+    let { name, email, password, role } = req.body;
+    // Normaliza
+    email = email.trim().toLowerCase();
 
-  if (!estacioRegex.test(email)) {
-    return res.status(400).json({
-      error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
+    // Validação de domínio
+    if (!estacioRegex.test(email)) {
+      return res.status(400).json({
+        error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
+      });
+    }
+
+    // Confere se usuário já existe
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ error: 'Usuário já registrado.' });
+    }
+
+    // Hash de senha
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(password, salt);
+
+    // Cria usuário
+    const user = await User.create({
+      name,
+      email,
+      password: hashed,
+      role
     });
+
+    // Gera token JWT
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    // Retorna dados e token
+    res.status(201).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      token
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao registrar usuário.' });
   }
+});
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+// POST /api/auth/login
+router.post('/login', async (req, res) => {
+  try {
+    let { email, password } = req.body;
+    email = email.trim().toLowerCase();
 
-  const isMatch = await user.comparePassword(password);
-  if (!isMatch) return res.status(401).json({ error: 'Senha incorreta.' });
+    // Validação de domínio
+    if (!estacioRegex.test(email)) {
+      return res.status(400).json({
+        error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
+      });
+    }
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '8h' }
-  );
-  res.json({ token });
+    // Busca usuário
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    // Confere senha
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Senha incorreta.' });
+    }
+
+    // Gera token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro no login.' });
+  }
 });
 
 export default router;
