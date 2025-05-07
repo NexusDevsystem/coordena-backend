@@ -13,8 +13,10 @@ const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
+    console.log('[Auth Register] req.body =', req.body);
     let { name, email, password, role } = req.body;
     email = email.trim().toLowerCase();
+    console.log('[Auth Register] password raw =', password);
 
     if (!estacioRegex.test(email)) {
       return res.status(400).json({
@@ -29,6 +31,7 @@ router.post('/register', async (req, res) => {
 
     const salt   = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
+    console.log('[Auth Register] password hash =', hashed);
 
     const user = await User.create({ name, email, password: hashed, role });
 
