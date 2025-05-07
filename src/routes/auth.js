@@ -69,6 +69,11 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
+    // Logs para debug de senha
+    console.log('[Auth Login] password raw:', password);
+    console.log('[Auth Login] password hash:', user.password);
+    console.log('[Auth Login] compareSync:', bcrypt.compareSync(password, user.password));
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Senha incorreta.' });
