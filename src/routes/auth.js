@@ -1,4 +1,4 @@
-// backend/src/routes/auth.js
+// src/routes/auth.js
 
 import { Router } from 'express';
 import User        from '../models/User.js';
@@ -7,7 +7,7 @@ import bcrypt      from 'bcryptjs';
 
 const router = Router();
 
-// Regex institucional Estácio (alunos e professores)
+// Regex institucional Estácio
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
 // POST /api/auth/register
@@ -16,14 +16,14 @@ router.post('/register', async (req, res) => {
     let { name, email, password, role } = req.body;
     email = email.trim().toLowerCase();
 
-    // Validação de domínio institucional
+    // Validação de domínio
     if (!estacioRegex.test(email)) {
       return res.status(400).json({
         error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
       });
     }
 
-    // Verifica se já existe usuário
+    // Verifica existência de usuário
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({ error: 'Usuário já registrado.' });
@@ -50,10 +50,10 @@ router.post('/register', async (req, res) => {
 
     return res.status(201).json({
       user: {
-        id:    user._id,
-        name:  user.name,
+        id: user._id,
+        name: user.name,
         email: user.email,
-        role:  user.role
+        role: user.role
       },
       token
     });
@@ -69,14 +69,14 @@ router.post('/login', async (req, res) => {
     const email    = req.body.email.trim().toLowerCase();
     const password = req.body.password;
 
-    // Validação de domínio institucional
+    // Validação de domínio
     if (!estacioRegex.test(email)) {
       return res.status(400).json({
         error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
       });
     }
 
-    // Busca usuário no banco
+    // Busca usuário
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
@@ -88,7 +88,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Senha incorreta.' });
     }
 
-    // Gera e retorna token
+    // Gera token e retorna
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
