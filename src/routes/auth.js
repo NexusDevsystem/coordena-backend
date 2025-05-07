@@ -16,23 +16,18 @@ router.post('/register', async (req, res) => {
     let { name, email, password, role } = req.body;
     email = email.trim().toLowerCase();
 
-    // Validação de domínio
     if (!estacioRegex.test(email)) {
       return res.status(400).json({
         error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.'
       });
     }
 
-    // Gera hash da nova senha
-    const salt   = await bcrypt.genSalt(10);
-    const hashed = await bcrypt.hash(password, salt);
-
     // Tenta encontrar usuário existente
     let user = await User.findOne({ email });
     if (user) {
-      // Atualiza senha e demais campos
+      // Atualiza dados e senha (pre-save hook cuidará do hash)
       user.name     = name;
-      user.password = hashed;
+      user.password = password;
       user.role     = role;
       await user.save();
 
@@ -42,31 +37,19 @@ router.post('/register', async (req, res) => {
         process.env.JWT_SECRET,
         { expiresIn: '8h' }
       );
-
-      return res.json({
-        user: { id: user._id, name: user.name, email: user.email, role: user.role },
-        token
-      });
+      return res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role }, token });
     }
 
-    // Se não existe, cria novo usuário
-    user = await User.create({
-      name,
-      email,
-      password: hashed,
-      role
-    });
+    // Cria novo usuário (pre-save hook cuidará do hash)
+    user = await User.create({ name, email, password, role });
 
+    // Gera token JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
-
-    return res.status(201).json({
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
-      token
-    });
+    return res.status(201).json({ user: { id: user._id, name: user.name, email: user.email, role: user.role }, token });
   } catch (err) {
     console.error('[Auth Register] Error:', err);
     return res.status(500).json({ error: 'Erro ao registrar usuário.' });
