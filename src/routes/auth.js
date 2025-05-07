@@ -10,7 +10,7 @@ const router = Router();
 // Regex institucional Estácio (alunos e professores)
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
-// POST /api/auth/register (sem alterações de domínio)
+// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     let { name, email, password, role } = req.body;
@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login (com logs adicionais)
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     console.log('[Auth Login] req.body =', req.body);
@@ -63,7 +63,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email });
+    // Busca usuário incluindo o password (select: false por padrão)
+    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
