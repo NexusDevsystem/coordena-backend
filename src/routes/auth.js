@@ -1,74 +1,122 @@
-// backend/src/routes/auth.js
-import { Router } from 'express'
-import User        from '../models/User.js'
-import jwt         from 'jsonwebtoken'
-import bcrypt      from 'bcryptjs'
+import { Router } from 'express';
+import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
-const router = Router()
+const router = Router();
 
 // Regex institucional Estácio (alunos e professores)
-const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i
+const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
 // POST /api/auth/register
-// aqui inferimos o role a partir do domínio, removendo o select manual do role no front
 router.post('/register', async (req, res) => {
   try {
-    const { name, email: rawEmail, password } = req.body
-    const email = rawEmail.trim().toLowerCase()
+    const { name, email: rawEmail, password } = req.body;
+    const email = rawEmail.trim().toLowerCase();
 
-    // valida domínio
+    // Valida domínio institucional
     if (!estacioRegex.test(email)) {
-      return res.status(400).json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' })
+      return res
+        .status(400)
+        .json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
     }
 
-    // infere role automaticamente
-    const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student'
+    // Infere role automaticamente
+    const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
-    // busca usuário existente
-    let user = await User.findOne({ email })
+    // Busca usuário existente
+    let user = await User.findOne({ email });
     if (user) {
-      // atualiza nome, senha e role (model pre-save faz hash)
-      user.name     = name
-      user.password = password
-      user.role     = role
-      await user.save()
+      // Atualiza nome, senha e role (pre-save hook cuidará do hash)
+      user.name     = name;
+      user.password = password;
+      user.role     = role;
+      await user.save();
 
-      const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' })
-      return res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role }, token })
+      const token = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '8h' }
+      );
+      return res.json({
+        user: {
+          id:    user._id,
+          name:  user.name,
+          email: user.email,
+          role:  user.role
+        },
+        token
+      });
     }
 
-    // cria novo usuário
-    user = await User.create({ name, email, password, role })
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' })
-    return res.status(201).json({ user: { id: user._id, name: user.name, email: user.email, role: user.role }, token })
+    // Cria novo usuário
+    user = await User.create({ name, email, password, role });
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+    return res.status(201).json({
+      user: {
+        id:    user._id,
+        name:  user.name,
+        email: user.email,
+        role:  user.role
+      },
+      token
+    });
   } catch (err) {
-    console.error('[Auth Register] Error:', err)
-    return res.status(500).json({ error: 'Erro ao registrar usuário.' })
+    console.error('[Auth Register] Error:', err);
+    return res.status(500).json({ error: 'Erro ao registrar usuário.' });
   }
-})
+});
 
-// POST /api/auth/login (sem alterações)
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const email    = req.body.email.trim().toLowerCase()
-    const password = req.body.password
+    const email    = req.body.email.trim().toLowerCase();
+    const password = req.body.password;
 
+    // Valida domínio institucional
     if (!estacioRegex.test(email)) {
-      return res.status(400).json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' })
+      return res
+        .status(400)
+        .json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
     }
 
-    const user = await User.findOne({ email }).select('+password')
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' })
+    // Busca usuário incluindo o campo oculto 'password'
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
 
-    const isMatch = await bcrypt.compare(password, user.password)
-    if (!isMatch) return res.status(401).json({ error: 'Senha incorreta.' })
+    // Compara senha
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Senha incorreta.' });
+    }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' })
-    return res.json({ token })
+    // Gera token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    // Retorna tanto o user quanto o token
+    return res.json({
+      user: {
+        id:    user._id,
+        name:  user.name,
+        email: user.email,
+        role:  user.role
+      },
+      token
+    });
   } catch (err) {
-    console.error('[Auth Login] Error:', err)
-    return res.status(500).json({ error: 'Erro no login.' })
+    console.error('[Auth Login] Error:', err);
+    return res.status(500).json({ error: 'Erro no login.' });
   }
-})
+});
 
-export default router
+export default router;
