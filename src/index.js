@@ -29,7 +29,7 @@ app.use(cors({
     console.warn('⛔  CORS blocked:', origin);
     callback(new Error(`Bloqueado por CORS: ${origin}`));
   },
-  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
 app.options('*', cors()); // PRE-FLIGHT
@@ -41,18 +41,18 @@ app.use('/api/auth', authRoutes);
 
 // Esquema de reserva (Mongoose)
 const reservaSchema = new mongoose.Schema({
-  date:        { type: String, required: true },
-  start:       { type: String, required: true },
-  end:         { type: String, required: true },
-  resource:    { type: String, required: true },
-  sala:        { type: String, default: '' },
-  type:        { type: String, required: true },
+  date: { type: String, required: true },
+  start: { type: String, required: true },
+  end: { type: String, required: true },
+  resource: { type: String, required: true },
+  sala: { type: String, default: '' },
+  type: { type: String, required: true },
   responsible: { type: String, required: true },
-  department:  { type: String, required: true },
-  status:      { type: String, required: true },
+  department: { type: String, required: true },
+  status: { type: String, required: true },
   description: { type: String, default: '' },
-  time:        { type: String, required: true },
-  title:       { type: String, required: true }
+  time: { type: String, required: true },
+  title: { type: String, required: true }
 }, { timestamps: true });
 
 const Reserva = mongoose.model('Reserva', reservaSchema);
@@ -67,11 +67,31 @@ app.get('/api/reservas', protect, async (_req, res) => {
   }
 });
 
+// ────────────────
+// horários fixos
+// ────────────────
+const fixedSchedules = [
+  // exemplo de um horário na terça-feira (2) das 08:00 às 08:50 no Lab401
+  { lab: "Lab401", dayOfWeek: 2, startTime: "08:00", endTime: "08:50", turno: "Manhã" },
+  { lab: "Lab401", dayOfWeek: 2, startTime: "09:00", endTime: "09:50", turno: "Manhã" },
+  // … complemente com todos os seus horários fixos …
+];
+
+// rota para retornar todos os horários fixos; protege se quiser
+app.get(
+  '/api/fixedSchedules',
+  protect,                   // ou remova se não quiser exigir login
+  async (_req, res) => {
+    res.json(fixedSchedules);
+  }
+);
+
+
 // POST → apenas professor e admin
 app.post(
   '/api/reservas',
   protect,
-  authorize('professor','admin'),
+  authorize('professor', 'admin'),
   async (req, res) => {
     try {
       const saved = await new Reserva(req.body).save();
@@ -86,7 +106,7 @@ app.post(
 app.put(
   '/api/reservas/:id',
   protect,
-  authorize('professor','admin'),
+  authorize('professor', 'admin'),
   async (req, res) => {
     try {
       const updated = await Reserva.findByIdAndUpdate(
@@ -106,7 +126,7 @@ app.put(
 app.delete(
   '/api/reservas/:id',
   protect,
-  authorize('professor','admin'),
+  authorize('professor', 'admin'),
   async (req, res) => {
     try {
       const deleted = await Reserva.findByIdAndDelete(req.params.id);
