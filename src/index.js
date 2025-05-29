@@ -19,19 +19,32 @@ mongoose
   .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
   .catch(err => console.error('❌ Erro no MongoDB:', err));
 
-// CORS dinâmico: só aceita FRONTEND_URL ou localhost em dev
+// CORS dinâmico: só aceita FRONTEND_URLS (separadas por vírgula) ou localhost em dev
+const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(u => u.trim())
+  .filter(u => u);
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin === FRONTEND_URL || origin.includes('localhost')) {
-      console.log('✔️  CORS allow:', origin || 'no-origin');
+    // sem origin (curl, mobile) ou localhost → liberado
+    if (!origin || origin.includes('localhost')) {
+      console.log('✔️  CORS allow (no-origin or localhost):', origin || 'no-origin');
       return callback(null, true);
     }
+    // origem está na lista?
+    if (FRONTEND_URLS.includes(origin)) {
+      console.log('✔️  CORS allow:', origin);
+      return callback(null, true);
+    }
+    // bloqueia
     console.warn('⛔  CORS blocked:', origin);
     callback(new Error(`Bloqueado por CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
+
 app.options('*', cors()); // PRE-FLIGHT
 
 app.use(express.json());
