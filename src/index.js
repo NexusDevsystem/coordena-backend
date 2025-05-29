@@ -84,11 +84,34 @@ app.get('/api/reservas', protect, async (_req, res) => {
 // horários fixos
 // ────────────────
 const fixedSchedules = [
-  // exemplo de um horário na terça-feira (2) das 08:00 às 08:50 no Lab401
-  { lab: "Lab401", dayOfWeek: 2, startTime: "08:00", endTime: "08:50", turno: "Manhã" },
-  { lab: "Lab401", dayOfWeek: 2, startTime: "09:00", endTime: "09:50", turno: "Manhã" },
-  // … complemente com todos os seus horários fixos …
+  // B401 — Manhã
+  // Segunda-feira (1)
+  { lab: "B401", dayOfWeek: 1, startTime: "08:20", endTime: "09:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 1, startTime: "09:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 1, startTime: "10:10", endTime: "11:00", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 1, startTime: "11:00", endTime: "11:50", turno: "Manhã" },
+
+  // Terça-feira (2)
+  { lab: "B401", dayOfWeek: 2, startTime: "08:20", endTime: "09:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 2, startTime: "09:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 2, startTime: "10:10", endTime: "11:00", turno: "Manhã" },
+
+  // Quarta-feira (3)
+  { lab: "B401", dayOfWeek: 3, startTime: "08:20", endTime: "09:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 3, startTime: "09:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 3, startTime: "10:10", endTime: "11:00", turno: "Manhã" },
+
+  // Quinta-feira (4)
+  { lab: "B401", dayOfWeek: 4, startTime: "08:20", endTime: "09:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 4, startTime: "09:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 4, startTime: "10:10", endTime: "11:00", turno: "Manhã" },
+
+  // Sexta-feira (5)
+  { lab: "B401", dayOfWeek: 5, startTime: "08:20", endTime: "09:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 5, startTime: "09:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "B401", dayOfWeek: 5, startTime: "10:10", endTime: "11:00", turno: "Manhã" },
 ];
+
 
 // rota para retornar todos os horários fixos; protege se quiser
 app.get(
