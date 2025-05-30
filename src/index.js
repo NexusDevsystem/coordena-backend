@@ -84,61 +84,90 @@ app.get('/api/reservas', protect, async (_req, res) => {
 // horários fixos
 // ────────────────
 const fixedSchedules = [
-  // ── LAB B401 ──
-  // Manhã
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Sergio Andrade', disciplina: 'Microprocessadores' },
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Sergio Andrade', disciplina: 'Microprocessadores' },
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Sergio Andrade', disciplina: 'Microprocessadores' },
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Sergio Andrade', disciplina: 'Microprocessadores' },
-  { lab: 'Lab B401', dayOfWeek: 2, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Erick Melo', disciplina: 'Sistemas Digitais' },
-  { lab: 'Lab B401', dayOfWeek: 2, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Erick Melo', disciplina: 'Sistemas Digitais' },
-  { lab: 'Lab B401', dayOfWeek: 2, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Erick Melo', disciplina: 'Sistemas Digitais' },
-  { lab: 'Lab B401', dayOfWeek: 2, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Erick Melo', disciplina: 'Sistemas Digitais' },
-  { lab: 'Lab B401', dayOfWeek: 3, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Suzane Alfaia Dias', disciplina: 'Banco de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 3, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Suzane Alfaia Dias', disciplina: 'Banco de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 3, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Suzane Alfaia Dias', disciplina: 'Banco de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 3, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Suzane Alfaia Dias', disciplina: 'Banco de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 4, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Frederico Santana Filho', disciplina: 'Estrutura de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 4, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Frederico Santana Filho', disciplina: 'Estrutura de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 4, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Frederico Santana Filho', disciplina: 'Estrutura de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 4, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Frederico Santana Filho', disciplina: 'Estrutura de Dados' },
-  { lab: 'Lab B401', dayOfWeek: 5, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Int A Prog Estr' },
-  { lab: 'Lab B401', dayOfWeek: 5, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Int A Prog Estr' },
-  { lab: 'Lab B401', dayOfWeek: 5, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Int A Prog Estr' },
-  { lab: 'Lab B401', dayOfWeek: 5, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Int A Prog Estr' },
-  // Tarde (Programa Bolsa Família / Curso Alicerce etc — conforme sua planilha)
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '13:00', endTime: '14:20', turno: 'Tarde', professor: 'Programa Bolsa Família', disciplina: '09 & 23/06' },
-  // … repita para cada faixa 14:20–15:10, 15:20–16:10, 16:10–17:00, 17:00–18:00 em todos os dias e laboratórios …
-  // Noite
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '19:00', endTime: '19:50', turno: 'Noite', professor: 'Eudes Danilo', disciplina: 'Introd. a Prog. de Comput.' },
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '19:50', endTime: '20:40', turno: 'Noite', professor: 'Eudes Danilo', disciplina: 'Introd. a Prog. de Comput.' },
-  { lab: 'Lab B401', dayOfWeek: 1, startTime: '20:50', endTime: '21:40', turno: 'Noite', professor: 'Eudes Danilo', disciplina: 'Introd. a Prog. de Comput.' },
-  // … siga o mesmo padrão para terça, quarta, quinta e sexta …
-  
-  // ── LAB B402 ──
-  // Manhã
-  { lab: 'Lab B402', dayOfWeek: 1, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Sistemas Operacionais' },
-  { lab: 'Lab B402', dayOfWeek: 1, startTime: '09:20', endTime: '10:10', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Sistemas Operacionais' },
-  { lab: 'Lab B402', dayOfWeek: 1, startTime: '10:10', endTime: '11:00', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Sistemas Operacionais' },
-  { lab: 'Lab B402', dayOfWeek: 1, startTime: '11:00', endTime: '11:50', turno: 'Manhã', professor: 'Frederico Filho', disciplina: 'Sistemas Operacionais' },
-  // … e assim por diante para todos os dias, horários de tarde (Curso Alicerce) e noite (Suzane Alfaia etc) …
+  // ── Lab B401 ──
+  // Segunda-feira (1)
+  { lab: "Lab B401", dayOfWeek: 1, startTime: "08:20", endTime: "11:50", turno: "Manhã" },
+  { lab: "Lab B401", dayOfWeek: 1, startTime: "13:00", endTime: "17:00", turno: "Tarde" },
+  { lab: "Lab B401", dayOfWeek: 1, startTime: "19:00", endTime: "21:40", turno: "Noite" },
 
-  // ── LAB B403 ──
-  // Só possui turma à noite (Pesquisa Operacional, Eletrônica Digital, etc):
-  { lab: 'Lab B403', dayOfWeek: 2, startTime: '19:00', endTime: '19:50', turno: 'Noite', professor: 'Rafael Leão', disciplina: 'Pesquisa Operacional' },
-  // … demais entries …
+  // Terça-feira (2)
+  { lab: "Lab B401", dayOfWeek: 2, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B401", dayOfWeek: 2, startTime: "13:00", endTime: "17:00", turno: "Tarde" },
 
-  // ── LAB B405 ──
-  // Manhã e Tarde CIEE:
-  { lab: 'Lab B405', dayOfWeek: 1, startTime: '08:20', endTime: '09:10', turno: 'Manhã', professor: 'CIEE', disciplina: 'CIEE' },
-  // … continue até 17:00 …
-  // Noite Arielly:
-  { lab: 'Lab B405', dayOfWeek: 1, startTime: '19:00', endTime: '19:50', turno: 'Noite', professor: 'Arielly', disciplina: 'Aulas' },
-  // … até 21:40 …
+  // Quarta-feira (3)
+  { lab: "Lab B401", dayOfWeek: 3, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B401", dayOfWeek: 3, startTime: "13:00", endTime: "17:00", turno: "Tarde" },
+  { lab: "Lab B401", dayOfWeek: 3, startTime: "19:00", endTime: "22:30", turno: "Noite" },
 
-  // ── LAB Imaginologia ──
-  // (sem aulas fixas, fica vazio)
+  // Quinta-feira (4)
+  { lab: "Lab B401", dayOfWeek: 4, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
 
+  // Sexta-feira (5)
+  { lab: "Lab B401", dayOfWeek: 5, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B401", dayOfWeek: 5, startTime: "19:00", endTime: "22:30", turno: "Noite" },
+
+
+  // ── Lab B402 ──
+  // Segunda-feira (1)
+  { lab: "Lab B402", dayOfWeek: 1, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B402", dayOfWeek: 1, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B402", dayOfWeek: 1, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Terça-feira (2)
+  { lab: "Lab B402", dayOfWeek: 2, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+
+  // Quarta-feira (3)
+  { lab: "Lab B402", dayOfWeek: 3, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B402", dayOfWeek: 3, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Quinta-feira (4)
+  { lab: "Lab B402", dayOfWeek: 4, startTime: "08:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "Lab B402", dayOfWeek: 4, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B402", dayOfWeek: 4, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Sexta-feira (5)
+  { lab: "Lab B402", dayOfWeek: 5, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B402", dayOfWeek: 5, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+
+  // ── Lab B403 ──
+  // Terça-feira (2)
+  { lab: "Lab B403", dayOfWeek: 2, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B403", dayOfWeek: 2, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Quinta-feira (4)
+  { lab: "Lab B403", dayOfWeek: 4, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+
+
+  // ── Lab B404 ──
+  // Segunda-feira (1)
+  { lab: "Lab B404", dayOfWeek: 1, startTime: "08:20", endTime: "11:00", turno: "Manhã" },
+  { lab: "Lab B404", dayOfWeek: 1, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B404", dayOfWeek: 1, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Terça-feira (2)
+  { lab: "Lab B404", dayOfWeek: 2, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+
+  // Quarta-feira (3)
+  { lab: "Lab B404", dayOfWeek: 3, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B404", dayOfWeek: 3, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Quinta-feira (4)
+  { lab: "Lab B404", dayOfWeek: 4, startTime: "08:20", endTime: "10:10", turno: "Manhã" },
+  { lab: "Lab B404", dayOfWeek: 4, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B404", dayOfWeek: 4, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+  // Sexta-feira (5)
+  { lab: "Lab B404", dayOfWeek: 5, startTime: "13:00", endTime: "18:00", turno: "Tarde" },
+  { lab: "Lab B404", dayOfWeek: 5, startTime: "19:00", endTime: "21:40", turno: "Noite" },
+
+
+  // ── Lab B405 ──
+  // Segunda-feira (1)
+  { lab: "Lab B405", dayOfWeek: 1, startTime: "19:00", endTime: "22:30", turno: "Noite" },
+
+  // Sexta-feira (5)
+  { lab: "Lab B405", dayOfWeek: 5, startTime: "19:00", endTime: "22:30", turno: "Noite" },
 ];
 
 
