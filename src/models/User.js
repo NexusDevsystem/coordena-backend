@@ -9,7 +9,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['student','professor','admin'],
     default: 'student'
+  },
+
+  // ← Novo campo: fica "false" até o ADM aprovar
+  approved: {
+    type: Boolean,
+    default: false
   }
+
 }, { timestamps: true })
 
 userSchema.pre('save', async function(next) {
