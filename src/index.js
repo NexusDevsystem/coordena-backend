@@ -6,8 +6,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import authRoutes from './routes/auth.js';
-import adminRoutes from './routes/adminRoutes.js';      // ← Importa as rotas do ADM
-import { protect } from './middleware/authMiddleware.js';
+import adminRoutes from './routes/adminRoutes.js';
+import { authenticateToken as protect } from './middleware/authMiddleware.js';
 import authorize from './middleware/authorize.js';
 
 dotenv.config();
