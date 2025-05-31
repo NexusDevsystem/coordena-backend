@@ -28,10 +28,10 @@ router.get(
   }
 );
 
-// PATCH /api/admin/approve-user/:id
+// PATCH /api/admin/approve/:id
 // → Marca approved = true para o usuário especificado
 router.patch(
-  '/approve-user/:id',
+  '/approve/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
@@ -52,10 +52,10 @@ router.patch(
   }
 );
 
-// DELETE /api/admin/reject-user/:id
+// DELETE /api/admin/reject/:id
 // → Remove (ou rejeita) o usuário especificado
 router.delete(
-  '/reject-user/:id',
+  '/reject/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
@@ -66,8 +66,6 @@ router.delete(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      // Se preferir apenas marcar rejeitado, adicione um campo "rejected" em vez de deletar. 
-      // Aqui vamos deletar completamente:
       await User.findByIdAndDelete(userId);
       return res.json({ message: 'Usuário rejeitado e excluído com sucesso.' });
     } catch (err) {

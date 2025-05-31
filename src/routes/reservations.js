@@ -12,7 +12,7 @@ const reservationSchema = new mongoose.Schema(
     type:        { type: String, required: true },
     responsible: { type: String, required: true },
     department:  { type: String, required: true },
-    status:      { type: String, required: true, default: 'pending' }, // → default pendente
+    status:      { type: String, required: true, default: 'pending' },
     description: { type: String, default: '' },
     time:        { type: String, required: true },
     title:       { type: String, required: true }
@@ -20,6 +20,5 @@ const reservationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Model name: "Reservation"
 const Reservation = mongoose.model('Reservation', reservationSchema);
 export default Reservation;
