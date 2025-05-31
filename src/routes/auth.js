@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
     const email = rawEmail.trim().toLowerCase();
 
     // Valida domínio institucional
-    const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
+    const estacioRegex = /^[\w.%+-]+@(alunos|professor|admin)\.estacio\.br$/i;
     if (!estacioRegex.test(email)) {
       return res
         .status(400)
