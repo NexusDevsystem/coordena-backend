@@ -1,33 +1,21 @@
-import mongoose from 'mongoose'
-import bcrypt from 'bcryptjs'
+// backend/src/models/User.js
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
-  name:     { type: String, required: true },
-  email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true, select: false },
-  role:     {
-    type: String,
-    enum: ['student','professor','admin'],
-    default: 'student'
-  },
+  name:       { type: String, required: true },
+  email:      { type: String, required: true, unique: true },
+  password:   { type: String, required: true, select: false },
+  role:       { type: String, enum: ['student','professor','admin'], default: 'student' },
+  approved:   { type: Boolean, default: false },
+  createdAt:  { type: Date, default: Date.now }
+});
 
-  // ← Novo campo: fica "false" até o ADM aprovar
-  approved: {
-    type: Boolean,
-    default: false
-  }
-
-}, { timestamps: true })
-
+// criptografa senha antes de salvar
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next()
-  const salt = await bcrypt.genSalt(10)
-  this.password = await bcrypt.hash(this.password, salt)
-  next()
-})
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
 
-userSchema.methods.matchPassword = function(entered) {
-  return bcrypt.compare(entered, this.password)
-}
-
-export default mongoose.model('User', userSchema)
+export default mongoose.model('User', userSchema);

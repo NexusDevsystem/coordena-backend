@@ -8,17 +8,16 @@ import bcrypt from 'bcryptjs';
 
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
-import { authenticateToken } from './middleware/authMiddleware.js'; // ← nome exato exportado
-import authorize from './middleware/authorize.js';
-import User from './models/User.js'; // ← Modelo de usuário (Mongoose)
+import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
+import authorize from './middleware/authorize.js';                // middleware de roles para reservas
+import User from './models/User.js';                              // Modelo de usuário (Mongoose)
 
 dotenv.config();
 
-const app = express();
-const PORT        = process.env.PORT || 10000;
-const MONGO_URI   = process.env.MONGO_URI;
+const app          = express();
+const PORT         = process.env.PORT || 10000;
+const MONGO_URI    = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
-
 
 // ----------------------------------------
 // Função seedAdmin(): cria um admin padrão
@@ -58,7 +57,6 @@ async function seedAdmin() {
   }
 }
 
-
 // ----------------------------------------
 // Conexão com MongoDB (Coordena+)
 // ----------------------------------------
@@ -70,7 +68,6 @@ mongoose
     await seedAdmin();
   })
   .catch(err => console.error('❌ Erro no MongoDB:', err));
-
 
 // ----------------------------------------
 // CORS dinâmico
@@ -98,28 +95,25 @@ app.use(
       console.warn('⛔  CORS blocked:', origin);
       callback(new Error(`Bloqueado por CORS: ${origin}`));
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true
   })
 );
 app.options('*', cors()); // Pre-flight
 app.use(express.json());
 
-
 // ----------------------------------------
-// Rotas de autenticação (login, register)
+// Rotas de autenticação (login, register, etc.)
 // ----------------------------------------
 app.use('/api/auth', authRoutes);
 
-
 // ----------------------------------------
-// Rotas do painel ADM (ex.: aprovar/rejeitar usuários)
+// Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar)
 // ----------------------------------------
 app.use('/api/admin', adminRoutes);
 
-
 // ----------------------------------------
-// Esquema de reserva (Mongoose)
+// Esquema de reserva (Mongoose) e rotas de reservas
 // ----------------------------------------
 const reservaSchema = new mongoose.Schema(
   {
@@ -140,10 +134,7 @@ const reservaSchema = new mongoose.Schema(
 );
 const Reserva = mongoose.model('Reserva', reservaSchema);
 
-
-// ----------------------------------------
 // GET → retorna todas as reservas (usuário autenticado)
-// ----------------------------------------
 app.get('/api/reservas', authenticateToken, async (_req, res) => {
   try {
     const all = await Reserva.find().sort({ date: 1, start: 1 });
@@ -210,9 +201,7 @@ app.get(
   }
 );
 
-// ----------------------------------------
 // CRUD de reservas (somente para “professor” ou “admin”)
-// ----------------------------------------
 app.post(
   '/api/reservas',
   authenticateToken,
@@ -258,7 +247,7 @@ app.delete(
 );
 
 // ----------------------------------------
-// Healthcheck
+// Healthcheck (rota raiz)
 // ----------------------------------------
 app.get('/', (_req, res) => {
   res.send(`🟢 API Coordena+ rodando na porta ${PORT}`);
