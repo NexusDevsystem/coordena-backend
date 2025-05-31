@@ -27,7 +27,7 @@ async function seedAdmin() {
   const DEFAULT_ADMIN = {
     name: 'Administrador Coordena',
     email: 'admin@admin.estacio.br',
-    rawPassword: 'Admin#1234', // Senha “hard-coded”
+    rawPassword: 'admin', // Senha “hard-coded”
     role: 'admin'
   };
 
