@@ -58,7 +58,7 @@ router.post('/login', async (req, res) => {
     const password = req.body.password || '';
     const email = rawEmail.trim().toLowerCase();
 
-    // 2) Valida domínio institucional (agora incluindo @admin.estacio.br)
+    // 2) Valida domínio institucional (incluindo @admin.estacio.br)
     const estacioRegex = /^[\w.%+-]+@(alunos|professor|admin)\.estacio\.br$/i;
     if (!estacioRegex.test(email)) {
       return res
@@ -66,14 +66,14 @@ router.post('/login', async (req, res) => {
         .json({ error: 'E-mail inválido. Use @alunos.estacio.br, @professor.estacio.br ou @admin.estacio.br.' });
     }
 
-    // 3) Busca usuário pelo e-mail e inclui o campo 'password' (normalmente oculto por select: false)
+    // 3) Busca usuário pelo e-mail e inclui o campo 'password' (normalmente oculto)
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // 4) Bloqueia login caso a conta ainda não tenha sido aprovada pelo ADM
-    if (!user.approved) {
+    // 4) Bloqueia login apenas se NÃO for admin e ainda não estiver aprovado
+    if (user.role !== 'admin' && !user.approved) {
       return res
         .status(403)
         .json({ error: 'Sua conta ainda não foi aprovada pelo administrador.' });
@@ -108,4 +108,3 @@ router.post('/login', async (req, res) => {
   }
 });
 
-export default router;
