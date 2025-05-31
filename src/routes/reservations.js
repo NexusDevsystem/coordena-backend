@@ -1,20 +1,25 @@
-// backend/src/routes/reservas.js
-import express from 'express'
-import {
-  getAll, createReserva, updateReserva, deleteReserva
-} from '../controllers/reservaController.js'
-import { protect, authorizeProfessor } from '../middleware/auth.js'
+// backend/src/models/Reservation.js
 
-const router = express.Router()
+import mongoose from 'mongoose';
 
-router
-  .route('/')
-  .get(protect, getAll)
-  .post(protect, authorizeProfessor, createReserva)
+const reservationSchema = new mongoose.Schema(
+  {
+    date:        { type: String, required: true },
+    start:       { type: String, required: true },
+    end:         { type: String, required: true },
+    resource:    { type: String, required: true },
+    sala:        { type: String, default: '' },
+    type:        { type: String, required: true },
+    responsible: { type: String, required: true },
+    department:  { type: String, required: true },
+    status:      { type: String, required: true, default: 'pending' }, // → default pendente
+    description: { type: String, default: '' },
+    time:        { type: String, required: true },
+    title:       { type: String, required: true }
+  },
+  { timestamps: true }
+);
 
-router
-  .route('/:id')
-  .put(protect, authorizeProfessor, updateReserva)
-  .delete(protect, authorizeProfessor, deleteReserva)
-
-export default router
+// Model name: "Reservation"
+const Reservation = mongoose.model('Reservation', reservationSchema);
+export default Reservation;

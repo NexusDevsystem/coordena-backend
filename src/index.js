@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 
 // → NOVO: importe o router de Push Subscriptions
 import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
-
+import Reservation from './models/Reservation.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
@@ -213,13 +213,44 @@ app.post(
   authorize('professor', 'admin'),
   async (req, res) => {
     try {
-      const saved = await new Reserva(req.body).save();
+      // Extrai tudo, mas força status para "pending"
+      const {
+        date,
+        start,
+        end,
+        resource,
+        sala = '',
+        type,
+        responsible,
+        department,
+        description = '',
+        time,
+        title
+      } = req.body;
+
+      const newReservation = new Reservation({
+        date,
+        start,
+        end,
+        resource,
+        sala,
+        type,
+        responsible,
+        department,
+        status: 'pending',       // **sempre “pending”**
+        description,
+        time,
+        title
+      });
+
+      const saved = await newReservation.save();
       return res.status(201).json(saved);
     } catch (err) {
       return res.status(400).json({ error: 'Erro ao criar reserva', details: err.message });
     }
   }
 );
+
 
 app.put(
   '/api/reservas/:id',
