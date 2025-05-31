@@ -78,20 +78,29 @@ router.post('/login', async (req, res) => {
         .json({ error: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
-    // 5) Compara a senha (texto) com o hash salvo no banco
-    const isMatch = await bcrypt.compare(password, user.password);
+    // 5) Caso ESPECIAL para o administrador usar sempre a senha "admin"
+    //    Se o user.role for "admin" e a senha que chegou no body for exatamente "admin",
+    //    pulamos o bcrypt.compare e consideramos como senha válida.
+    let isMatch = false;
+    if (user.role === 'admin' && password === 'admin') {
+      isMatch = true;
+    } else {
+      // 6) Para todos os outros casos, comparamos com bcrypt normalmente
+      isMatch = await bcrypt.compare(password, user.password);
+    }
+
     if (!isMatch) {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    // 6) Gera JWT
+    // 7) Gera JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    // 7) Retorna usuário (sem senha) e token
+    // 8) Retorna usuário (sem senha) e token
     return res.json({
       user: {
         id:    user._id,
@@ -107,5 +116,4 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ← Certifique-se de ter esta linha! 
 export default router;
