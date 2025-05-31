@@ -6,6 +6,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
+// → NOVO: importe o router de Push Subscriptions
+import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
+
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
@@ -19,6 +22,7 @@ const PORT         = process.env.PORT || 10000;
 const MONGO_URI    = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 
+
 // ----------------------------------------
 // Função seedAdmin(): cria um admin padrão
 // ----------------------------------------
@@ -26,19 +30,19 @@ async function seedAdmin() {
   const DEFAULT_ADMIN = {
     name: 'Administrador Coordena',
     email: 'admin@admin.estacio.br',
-    rawPassword: 'admin', // Senha “hard-coded”
+    rawPassword: 'admin', // Senha “hard‐coded”
     role: 'admin'
   };
 
   try {
-    // 1) Verifica se já existe um usuário com esse e-mail
+    // 1) Verifica se já existe um usuário com esse e‐mail
     const existing = await User.findOne({ email: DEFAULT_ADMIN.email });
     if (existing) {
       console.log('ℹ️  Usuário admin já existe, não será recriado.');
       return;
     }
 
-    // 2) Se não existe, hash na senha e cria o registro
+    // 2) Se não existe, faz hash na senha e cria o registro
     const hashed = await bcrypt.hash(DEFAULT_ADMIN.rawPassword, 10);
 
     await User.create({
@@ -50,7 +54,7 @@ async function seedAdmin() {
     });
 
     console.log('✅ Usuário admin padrão criado:');
-    console.log(`   → E-mail: ${DEFAULT_ADMIN.email}`);
+    console.log(`   → E‐mail: ${DEFAULT_ADMIN.email}`);
     console.log(`   → Senha:  ${DEFAULT_ADMIN.rawPassword}`);
   } catch (err) {
     console.error('❌ Erro ao tentar criar usuário admin padrão:', err);
@@ -111,6 +115,7 @@ app.use('/api/auth', authRoutes);
 // Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar)
 // ----------------------------------------
 app.use('/api/admin', adminRoutes);
+app.use('/api/push', pushSubscriptionsRouter);
 
 // ----------------------------------------
 // Esquema de reserva (Mongoose) e rotas de reservas
