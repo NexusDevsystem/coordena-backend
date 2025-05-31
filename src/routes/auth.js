@@ -13,7 +13,7 @@ router.post('/register', async (req, res) => {
     const { name, email: rawEmail, password } = req.body;
     const email = rawEmail.trim().toLowerCase();
 
-    // 1) Valida domínio institucional
+    // 1) Valida domínio institucional (alunos ou professor)
     const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
     if (!estacioRegex.test(email)) {
       return res
@@ -21,25 +21,26 @@ router.post('/register', async (req, res) => {
         .json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
     }
 
-    // 2) Verifica se já existe
+    // 2) Verifica se já existe um usuário com este e-mail
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ error: 'E-mail já cadastrado.' });
     }
 
-    // 3) Infere role (student/professor)
+    // 3) Determina role (student ou professor)
     const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
-    // 4) Cria novo usuário com approved=false (pendente)
+    // 4) Cria novo usuário com approved=false (pendente de aprovação)
+    //    Supondo que o seu model User criptografa a senha via pre('save')
     const newUser = await User.create({
       name,
       email,
-      password,   // a senha será criptografada pelo pre('save') do model
+      password,
       role,
-      approved: false // fica pendente até ADM aprovar
+      approved: false // ficará pendente até o administrador aprovar
     });
 
-    // 5) Retorna apenas mensagem de sucesso (sem gerar token)
+    // 5) Retorna apenas mensagem de sucesso (sem gerar token neste momento)
     return res.status(201).json({
       message: 'Cadastro recebido! Aguarde aprovação do administrador antes de logar.'
     });
@@ -52,43 +53,46 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
+    // 1) Pega email e senha do corpo da requisição
     const rawEmail = req.body.email || '';
     const password = req.body.password || '';
     const email = rawEmail.trim().toLowerCase();
 
-    // Valida domínio institucional
+    // 2) Valida domínio institucional (agora incluindo @admin.estacio.br)
     const estacioRegex = /^[\w.%+-]+@(alunos|professor|admin)\.estacio\.br$/i;
     if (!estacioRegex.test(email)) {
       return res
         .status(400)
-        .json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
+        .json({ error: 'E-mail inválido. Use @alunos.estacio.br, @professor.estacio.br ou @admin.estacio.br.' });
     }
 
-    // Busca usuário incluindo password
+    // 3) Busca usuário pelo e-mail e inclui o campo 'password' (normalmente oculto por select: false)
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // Bloqueia login se não aprovado
+    // 4) Bloqueia login caso a conta ainda não tenha sido aprovada pelo ADM
     if (!user.approved) {
       return res
         .status(403)
         .json({ error: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
-    // Checa senha
+    // 5) Compara a senha que veio na requisição com o hash salvo no banco
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    // Gera JWT
+    // 6) Gera o JWT (use a sua chave secreta definida em .env)
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
+
+    // 7) Retorna o objeto 'user' (sem a senha) e o token
     return res.json({
       user: {
         id:    user._id,
