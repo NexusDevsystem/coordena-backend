@@ -4,26 +4,77 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { authenticateToken as protect } from './middleware/authMiddleware.js';
 import authorize from './middleware/authorize.js';
+import User from './models/User.js'; // ← importe o modelo de User
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const MONGO_URI = process.env.MONGO_URI;
+const PORT       = process.env.PORT || 10000;
+const MONGO_URI  = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 
+// --------
+// Função “seedAdmin” que cria um admin padrão se não existir
+// --------
+async function seedAdmin() {
+  const DEFAULT_ADMIN = {
+    name: 'Administrador Coordena',
+    email: 'admin@estacio.br',
+    rawPassword: 'Admin#1234', // ← senha que ficará “no código”
+    role: 'admin'
+  };
+
+  try {
+    // Verifica se já existe um usuário com esse e-mail
+    const existing = await User.findOne({ email: DEFAULT_ADMIN.email });
+
+    if (!existing) {
+      // Criptografa a senha
+      const hashed = await bcrypt.hash(DEFAULT_ADMIN.rawPassword, 10);
+
+      // Cria o usuário aprovado diretamente
+      await User.create({
+        name: DEFAULT_ADMIN.name,
+        email: DEFAULT_ADMIN.email,
+        password: hashed,
+        role: DEFAULT_ADMIN.role,
+        approved: true
+      });
+
+      console.log('✅ Usuário admin padrão criado:');
+      console.log(`   → E-mail: ${DEFAULT_ADMIN.email}`);
+      console.log(`   → Senha:  ${DEFAULT_ADMIN.rawPassword}`);
+    } else {
+      console.log('ℹ️ Usuário admin já existe, não será recriado.');
+    }
+  } catch (err) {
+    console.error('❌ Erro ao tentar criar usuário admin padrão:', err);
+  }
+}
+
+
+// --------
 // Conexão com MongoDB (Coordena+)
+// --------
 mongoose
   .connect(MONGO_URI, { dbName: 'Coordena+' })
-  .then(() => console.log('✅ Conectado ao MongoDB (Coordena+)'))
+  .then(async () => {
+    console.log('✅ Conectado ao MongoDB (Coordena+)');
+    // Após conexão, executa o seedAdmin():
+    await seedAdmin();
+  })
   .catch(err => console.error('❌ Erro no MongoDB:', err));
 
-// CORS dinâmico: só aceita FRONTEND_URLS (separadas por vírgula) ou localhost em dev
+
+// --------
+// CORS dinâmico
+// --------
 const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
   .split(',')
   .map(u => u.trim())
@@ -32,17 +83,14 @@ const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
 app.use(
   cors({
     origin: (origin, callback) => {
-      // sem origin (curl, mobile) ou localhost → liberado
       if (!origin || origin.includes('localhost')) {
         console.log('✔️  CORS allow (no-origin or localhost):', origin || 'no-origin');
         return callback(null, true);
       }
-      // origem está na lista?
       if (FRONTEND_URLS.includes(origin)) {
         console.log('✔️  CORS allow:', origin);
         return callback(null, true);
       }
-      // bloqueia
       console.warn('⛔  CORS blocked:', origin);
       callback(new Error(`Bloqueado por CORS: ${origin}`));
     },
@@ -54,19 +102,20 @@ app.use(
 app.options('*', cors()); // PRE-FLIGHT
 app.use(express.json());
 
-// ----------------------
+
+// --------
 // Rotas de autenticação
-// ----------------------
+// --------
 app.use('/api/auth', authRoutes);
 
-// ------------------------------------------
-// Rotas do painel ADM (aprovar/rejeitar usuários)
-// ------------------------------------------
+// --------
+// Rotas do painel ADM
+// --------
 app.use('/api/admin', adminRoutes);
 
-// ------------------------------------------
+// --------
 // Esquema de reserva (Mongoose)
-// ------------------------------------------
+// --------
 const reservaSchema = new mongoose.Schema(
   {
     date:        { type: String, required: true },
@@ -84,12 +133,12 @@ const reservaSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
 const Reserva = mongoose.model('Reserva', reservaSchema);
 
-// ------------------------------------------
+
+// --------
 // GET → retorna todas as reservas (usuário autenticado)
-// ------------------------------------------
+// --------
 app.get('/api/reservas', protect, async (_req, res) => {
   try {
     const all = await Reserva.find().sort({ date: 1, start: 1 });
@@ -99,11 +148,10 @@ app.get('/api/reservas', protect, async (_req, res) => {
   }
 });
 
-// ------------------------------------------
+// --------
 // Horários fixos
-// ------------------------------------------
+// --------
 const fixedSchedules = [
-  // ── Lab B401 ──
   { lab: 'Lab B401', dayOfWeek: 1, startTime: '08:20', endTime: '11:50', turno: 'Manhã' },
   { lab: 'Lab B401', dayOfWeek: 1, startTime: '13:00', endTime: '17:00', turno: 'Tarde' },
   { lab: 'Lab B401', dayOfWeek: 1, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
@@ -116,7 +164,6 @@ const fixedSchedules = [
   { lab: 'Lab B401', dayOfWeek: 5, startTime: '08:20', endTime: '11:00', turno: 'Manhã' },
   { lab: 'Lab B401', dayOfWeek: 5, startTime: '19:00', endTime: '22:30', turno: 'Noite' },
 
-  // ── Lab B402 ──
   { lab: 'Lab B402', dayOfWeek: 1, startTime: '08:20', endTime: '11:00', turno: 'Manhã' },
   { lab: 'Lab B402', dayOfWeek: 1, startTime: '13:00', endTime: '18:00', turno: 'Tarde' },
   { lab: 'Lab B402', dayOfWeek: 1, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
@@ -129,12 +176,10 @@ const fixedSchedules = [
   { lab: 'Lab B402', dayOfWeek: 5, startTime: '13:00', endTime: '18:00', turno: 'Tarde' },
   { lab: 'Lab B402', dayOfWeek: 5, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
 
-  // ── Lab B403 ──
   { lab: 'Lab B403', dayOfWeek: 2, startTime: '08:20', endTime: '11:00', turno: 'Manhã' },
   { lab: 'Lab B403', dayOfWeek: 2, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
   { lab: 'Lab B403', dayOfWeek: 4, startTime: '08:20', endTime: '11:00', turno: 'Manhã' },
 
-  // ── Lab B404 ──
   { lab: 'Lab B404', dayOfWeek: 1, startTime: '08:20', endTime: '11:00', turno: 'Manhã' },
   { lab: 'Lab B404', dayOfWeek: 1, startTime: '13:00', endTime: '18:00', turno: 'Tarde' },
   { lab: 'Lab B404', dayOfWeek: 1, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
@@ -147,7 +192,6 @@ const fixedSchedules = [
   { lab: 'Lab B404', dayOfWeek: 5, startTime: '13:00', endTime: '18:00', turno: 'Tarde' },
   { lab: 'Lab B404', dayOfWeek: 5, startTime: '19:00', endTime: '21:40', turno: 'Noite' },
 
-  // ── Lab B405 ──
   { lab: 'Lab B405', dayOfWeek: 1, startTime: '19:00', endTime: '22:30', turno: 'Noite' },
   { lab: 'Lab B405', dayOfWeek: 5, startTime: '19:00', endTime: '22:30', turno: 'Noite' }
 ];
