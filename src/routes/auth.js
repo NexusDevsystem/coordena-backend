@@ -31,16 +31,15 @@ router.post('/register', async (req, res) => {
     const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
     // 4) Cria novo usuário com approved=false (pendente de aprovação)
-    //    Supondo que o seu model User criptografa a senha via pre('save')
     const newUser = await User.create({
       name,
       email,
-      password,
+      password,       // o hash será gerado no pre('save') do model
       role,
-      approved: false // ficará pendente até o administrador aprovar
+      approved: false // aguardando aprovação
     });
 
-    // 5) Retorna apenas mensagem de sucesso (sem gerar token neste momento)
+    // 5) Retorna apenas mensagem de sucesso (sem gerar token)
     return res.status(201).json({
       message: 'Cadastro recebido! Aguarde aprovação do administrador antes de logar.'
     });
@@ -53,12 +52,12 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    // 1) Pega email e senha do corpo da requisição
+    // 1) Pega email e password do corpo da requisição
     const rawEmail = req.body.email || '';
     const password = req.body.password || '';
     const email = rawEmail.trim().toLowerCase();
 
-    // 2) Valida domínio institucional (incluindo @admin.estacio.br)
+    // 2) Valida domínio institucional (agora incluindo @admin)
     const estacioRegex = /^[\w.%+-]+@(alunos|professor|admin)\.estacio\.br$/i;
     if (!estacioRegex.test(email)) {
       return res
@@ -72,27 +71,27 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // 4) Bloqueia login apenas se NÃO for admin e ainda não estiver aprovado
+    // 4) Se NÃO for admin e ainda não estiver aprovado, bloqueia
     if (user.role !== 'admin' && !user.approved) {
       return res
         .status(403)
         .json({ error: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
-    // 5) Compara a senha que veio na requisição com o hash salvo no banco
+    // 5) Compara a senha (texto) com o hash salvo no banco
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    // 6) Gera o JWT (use a sua chave secreta definida em .env)
+    // 6) Gera JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    // 7) Retorna o objeto 'user' (sem a senha) e o token
+    // 7) Retorna usuário (sem senha) e token
     return res.json({
       user: {
         id:    user._id,
@@ -108,3 +107,5 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ← Certifique-se de ter esta linha! 
+export default router;
