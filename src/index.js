@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
 // → Importa o modelo de reservas recém-criado
-import Reservation from './models/Reservation.js';
+import Reservation from './models/reservation.js';
 
 import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
 import authRoutes from './routes/auth.js';
