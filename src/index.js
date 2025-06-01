@@ -142,7 +142,10 @@ const Reserva = mongoose.model('Reserva', reservaSchema);
 // GET → retorna todas as reservas (usuário autenticado)
 app.get('/api/reservas', authenticateToken, async (_req, res) => {
   try {
-    const all = await Reserva.find().sort({ date: 1, start: 1 });
+    // AGORA: busca apenas as reservas já aprovadas
+    const all = await Reserva
+      .find({ status: 'approved' })   // <-- só as aprovadas
+      .sort({ date: 1, start: 1 });
     return res.json(all);
   } catch {
     return res.status(500).json({ error: 'Erro ao buscar reservas' });
