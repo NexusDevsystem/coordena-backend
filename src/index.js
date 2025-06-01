@@ -1,5 +1,4 @@
-// backend/src/index.js
-
+// BACKEND/src/index.js (versão ajustada)
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -11,9 +10,9 @@ import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
 import Reservation from './models/reservation.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
-import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
-import authorize from './middleware/authorize.js';                // middleware de roles para reservas
-import User from './models/User.js';                              // Modelo de usuário (Mongoose)
+import { authenticateToken } from './middleware/authMiddleware.js';
+import authorize from './middleware/authorize.js';     // middleware de roles
+import User from './models/User.js';                    // Modelo de usuário (Mongoose)
 
 dotenv.config();
 
@@ -118,40 +117,99 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushSubscriptionsRouter);
 
 // ----------------------------------------
-// Esquema de reserva (Mongoose) e rotas de reservas
+// CRUD de RESERVATIONS (agora unificado no mesmo model “Reservation”)
 // ----------------------------------------
-const reservaSchema = new mongoose.Schema(
-  {
-    date:        { type: String, required: true },
-    start:       { type: String, required: true },
-    end:         { type: String, required: true },
-    resource:    { type: String, required: true },
-    sala:        { type: String, default: '' },
-    type:        { type: String, required: true },
-    responsible: { type: String, required: true },
-    department:  { type: String, required: true },
-    status:      { type: String, required: true },
-    description: { type: String, default: '' },
-    time:        { type: String, required: true },
-    title:       { type: String, required: true }
-  },
-  { timestamps: true }
-);
-const Reserva = mongoose.model('Reserva', reservaSchema);
 
-// GET → retorna todas as reservas (usuário autenticado)
-app.get('/api/reservas', authenticateToken, async (_req, res) => {
+// GET → retorna todas as reservas aprovadas
+app.get('/api/reservations', authenticateToken, async (_req, res) => {
   try {
-    // AGORA: busca apenas as reservas já aprovadas
-    const all = await Reserva
-      .find({ status: 'approved' })   // <-- só as aprovadas
-      .sort({ date: 1, start: 1 });
+    // Busca APENAS as reservas já aprovadas
+    const all = await Reservation.find({ status: 'approved' }).sort({ date: 1, start: 1 });
     return res.json(all);
-  } catch {
+  } catch (err) {
+    console.error('Erro ao buscar reservas:', err);
     return res.status(500).json({ error: 'Erro ao buscar reservas' });
   }
 });
 
+// POST → cria uma nova reserva (sempre com status: 'pending')
+app.post(
+  '/api/reservations',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const {
+        date,
+        start,
+        end,
+        resource,
+        sala = '',
+        type,
+        responsible,
+        department,
+        description = '',
+        time,
+        title
+      } = req.body;
+
+      const newReservation = new Reservation({
+        date,
+        start,
+        end,
+        resource,
+        sala,
+        type,
+        responsible,
+        department,
+        status: 'pending',   // <–– sempre “pending”
+        description,
+        time,
+        title
+      });
+
+      const saved = await newReservation.save();
+      return res.status(201).json(saved);
+    } catch (err) {
+      console.error('Erro ao criar reserva:', err);
+      return res.status(400).json({ error: 'Erro ao criar reserva', details: err.message });
+    }
+  }
+);
+
+// PUT → atualiza (apenas professor/admin pode mudar qualquer campo, inclusive status)
+app.put(
+  '/api/reservations/:id',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const updated = await Reservation.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' });
+      return res.json(updated);
+    } catch (err) {
+      console.error('Erro ao atualizar reserva:', err);
+      return res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message });
+    }
+  }
+);
+
+// DELETE → exclui reserva (professor/admin)
+app.delete(
+  '/api/reservations/:id',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const deleted = await Reservation.findByIdAndDelete(req.params.id);
+      if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' });
+      return res.json({ message: 'Reserva removida com sucesso' });
+    } catch (err) {
+      console.error('Erro ao deletar reserva:', err);
+      return res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message });
+    }
+  }
+);
 
 // ----------------------------------------
 // Horários fixos (rota protegida opcionalmente)
@@ -206,82 +264,6 @@ app.get(
   authenticateToken,
   async (_req, res) => {
     return res.json(fixedSchedules);
-  }
-);
-
-// CRUD de reservas (somente para “professor” ou “admin”)
-app.post(
-  '/api/reservas',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      // Extrai tudo, mas força status para "pending"
-      const {
-        date,
-        start,
-        end,
-        resource,
-        sala = '',
-        type,
-        responsible,
-        department,
-        description = '',
-        time,
-        title
-      } = req.body;
-
-      const newReservation = new Reservation({
-        date,
-        start,
-        end,
-        resource,
-        sala,
-        type,
-        responsible,
-        department,
-        status: 'pending',       // **sempre “pending”**
-        description,
-        time,
-        title
-      });
-
-      const saved = await newReservation.save();
-      return res.status(201).json(saved);
-    } catch (err) {
-      return res.status(400).json({ error: 'Erro ao criar reserva', details: err.message });
-    }
-  }
-);
-
-
-app.put(
-  '/api/reservas/:id',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true });
-      if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' });
-      return res.json(updated);
-    } catch (err) {
-      return res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message });
-    }
-  }
-);
-
-app.delete(
-  '/api/reservas/:id',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      const deleted = await Reserva.findByIdAndDelete(req.params.id);
-      if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' });
-      return res.json({ message: 'Reserva removida com sucesso' });
-    } catch (err) {
-      return res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message });
-    }
   }
 );
 
