@@ -6,22 +6,25 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
-// → NOVO: importe o router de Push Subscriptions
+// → Importa o router de Push Subscriptions
 import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
+
+// → Importa o modelo Reservation que criamos em src/models/Reservation.js
 import Reservation from './models/Reservation.js';
+
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
+
 import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
 import authorize from './middleware/authorize.js';                // middleware de roles para reservas
 import User from './models/User.js';                              // Modelo de usuário (Mongoose)
 
 dotenv.config();
 
-const app          = express();
-const PORT         = process.env.PORT || 10000;
-const MONGO_URI    = process.env.MONGO_URI;
+const app       = express();
+const PORT      = process.env.PORT || 10000;
+const MONGO_URI = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
-
 
 // ----------------------------------------
 // Função seedAdmin(): cria um admin padrão
@@ -35,22 +38,19 @@ async function seedAdmin() {
   };
 
   try {
-    // 1) Verifica se já existe um usuário com esse e‐mail
     const existing = await User.findOne({ email: DEFAULT_ADMIN.email });
     if (existing) {
       console.log('ℹ️  Usuário admin já existe, não será recriado.');
       return;
     }
 
-    // 2) Se não existe, faz hash na senha e cria o registro
     const hashed = await bcrypt.hash(DEFAULT_ADMIN.rawPassword, 10);
-
     await User.create({
       name: DEFAULT_ADMIN.name,
       email: DEFAULT_ADMIN.email,
       password: hashed,
       role: DEFAULT_ADMIN.role,
-      approved: true // Admin já vem aprovado por padrão
+      approved: true
     });
 
     console.log('✅ Usuário admin padrão criado:');
@@ -68,7 +68,6 @@ mongoose
   .connect(MONGO_URI, { dbName: 'Coordena+' })
   .then(async () => {
     console.log('✅ Conectado ao MongoDB (Coordena+)');
-    // Após conectar, garante que o admin exista
     await seedAdmin();
   })
   .catch(err => console.error('❌ Erro no MongoDB:', err));
@@ -85,17 +84,14 @@ const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
 app.use(
   cors({
     origin: (origin, callback) => {
-      // sem origin (curl, postman, etc.) OU localhost → liberado
       if (!origin || origin.includes('localhost')) {
         console.log('✔️  CORS allow (no-origin or localhost):', origin || 'no-origin');
         return callback(null, true);
       }
-      // origem está na lista?
       if (FRONTEND_URLS.includes(origin)) {
         console.log('✔️  CORS allow:', origin);
         return callback(null, true);
       }
-      // bloqueia
       console.warn('⛔  CORS blocked:', origin);
       callback(new Error(`Bloqueado por CORS: ${origin}`));
     },
@@ -103,7 +99,7 @@ app.use(
     credentials: true
   })
 );
-app.options('*', cors()); // Pre-flight
+app.options('*', cors());
 app.use(express.json());
 
 // ----------------------------------------
@@ -112,43 +108,104 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 // ----------------------------------------
-// Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar)
+// Rotas do painel ADM (usuários e reservas pendentes)
 // ----------------------------------------
 app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushSubscriptionsRouter);
 
 // ----------------------------------------
-// Esquema de reserva (Mongoose) e rotas de reservas
+// Rotas de reservas (professor/admin)
 // ----------------------------------------
-const reservaSchema = new mongoose.Schema(
-  {
-    date:        { type: String, required: true },
-    start:       { type: String, required: true },
-    end:         { type: String, required: true },
-    resource:    { type: String, required: true },
-    sala:        { type: String, default: '' },
-    type:        { type: String, required: true },
-    responsible: { type: String, required: true },
-    department:  { type: String, required: true },
-    status:      { type: String, required: true },
-    description: { type: String, default: '' },
-    time:        { type: String, required: true },
-    title:       { type: String, required: true }
-  },
-  { timestamps: true }
-);
-const Reserva = mongoose.model('Reserva', reservaSchema);
 
-// GET → retorna todas as reservas (usuário autenticado)
+// GET /api/reservas → retorna todas as reservas
 app.get('/api/reservas', authenticateToken, async (_req, res) => {
   try {
-    const all = await Reserva.find().sort({ date: 1, start: 1 });
+    const all = await Reservation.find().sort({ date: 1, start: 1 });
     return res.json(all);
-  } catch {
+  } catch (err) {
+    console.error('Erro ao buscar reservas:', err);
     return res.status(500).json({ error: 'Erro ao buscar reservas' });
   }
 });
 
+// POST /api/reservas → cria nova reserva com status "pending"
+app.post(
+  '/api/reservas',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const {
+        date,
+        start,
+        end,
+        resource,
+        sala = '',
+        type,
+        responsible,
+        department,
+        description = '',
+        time,
+        title
+      } = req.body;
+
+      const newReservation = new Reservation({
+        date,
+        start,
+        end,
+        resource,
+        sala,
+        type,
+        responsible,
+        department,
+        status: 'pending',
+        description,
+        time,
+        title
+      });
+
+      const saved = await newReservation.save();
+      return res.status(201).json(saved);
+    } catch (err) {
+      console.error('Erro ao criar reserva:', err);
+      return res.status(400).json({ error: 'Erro ao criar reserva', details: err.message });
+    }
+  }
+);
+
+// PUT /api/reservas/:id → atualiza reserva
+app.put(
+  '/api/reservas/:id',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const updated = await Reservation.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' });
+      return res.json(updated);
+    } catch (err) {
+      console.error('Erro ao atualizar reserva:', err);
+      return res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message });
+    }
+  }
+);
+
+// DELETE /api/reservas/:id → exclui reserva
+app.delete(
+  '/api/reservas/:id',
+  authenticateToken,
+  authorize('professor', 'admin'),
+  async (req, res) => {
+    try {
+      const deleted = await Reservation.findByIdAndDelete(req.params.id);
+      if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' });
+      return res.json({ message: 'Reserva removida com sucesso' });
+    } catch (err) {
+      console.error('Erro ao deletar reserva:', err);
+      return res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message });
+    }
+  }
+);
 
 // ----------------------------------------
 // Horários fixos (rota protegida opcionalmente)
@@ -203,82 +260,6 @@ app.get(
   authenticateToken,
   async (_req, res) => {
     return res.json(fixedSchedules);
-  }
-);
-
-// CRUD de reservas (somente para “professor” ou “admin”)
-app.post(
-  '/api/reservas',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      // Extrai tudo, mas força status para "pending"
-      const {
-        date,
-        start,
-        end,
-        resource,
-        sala = '',
-        type,
-        responsible,
-        department,
-        description = '',
-        time,
-        title
-      } = req.body;
-
-      const newReservation = new Reservation({
-        date,
-        start,
-        end,
-        resource,
-        sala,
-        type,
-        responsible,
-        department,
-        status: 'pending',       // **sempre “pending”**
-        description,
-        time,
-        title
-      });
-
-      const saved = await newReservation.save();
-      return res.status(201).json(saved);
-    } catch (err) {
-      return res.status(400).json({ error: 'Erro ao criar reserva', details: err.message });
-    }
-  }
-);
-
-
-app.put(
-  '/api/reservas/:id',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      const updated = await Reserva.findByIdAndUpdate(req.params.id, req.body, { new: true });
-      if (!updated) return res.status(404).json({ error: 'Reserva não encontrada' });
-      return res.json(updated);
-    } catch (err) {
-      return res.status(400).json({ error: 'Erro ao atualizar reserva', details: err.message });
-    }
-  }
-);
-
-app.delete(
-  '/api/reservas/:id',
-  authenticateToken,
-  authorize('professor', 'admin'),
-  async (req, res) => {
-    try {
-      const deleted = await Reserva.findByIdAndDelete(req.params.id);
-      if (!deleted) return res.status(404).json({ error: 'Reserva não encontrada' });
-      return res.json({ message: 'Reserva removida com sucesso' });
-    } catch (err) {
-      return res.status(500).json({ error: 'Erro ao deletar reserva', details: err.message });
-    }
   }
 );
 
