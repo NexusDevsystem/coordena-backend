@@ -6,18 +6,16 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
-// → Importa o router de Push Subscriptions
-import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
-
-// → Importa o modelo Reservation que criamos em src/models/Reservation.js
+// → Importa o modelo de reservas recém-criado
 import Reservation from './models/Reservation.js';
 
+import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
 
-import { authenticateToken } from './middleware/authMiddleware.js'; // nome exato exportado
-import authorize from './middleware/authorize.js';                // middleware de roles para reservas
-import User from './models/User.js';                              // Modelo de usuário (Mongoose)
+import { authenticateToken } from './middleware/authMiddleware.js'; // exato exportado
+import authorize from './middleware/authorize.js';                 // middleware de roles
+import User from './models/User.js';                               // modelo de usuário
 
 dotenv.config();
 
@@ -33,7 +31,7 @@ async function seedAdmin() {
   const DEFAULT_ADMIN = {
     name: 'Administrador Coordena',
     email: 'admin@admin.estacio.br',
-    rawPassword: 'admin', // Senha “hard‐coded”
+    rawPassword: 'admin', // Senha “hard-coded”
     role: 'admin'
   };
 
@@ -52,9 +50,8 @@ async function seedAdmin() {
       role: DEFAULT_ADMIN.role,
       approved: true
     });
-
     console.log('✅ Usuário admin padrão criado:');
-    console.log(`   → E‐mail: ${DEFAULT_ADMIN.email}`);
+    console.log(`   → E-mail: ${DEFAULT_ADMIN.email}`);
     console.log(`   → Senha:  ${DEFAULT_ADMIN.rawPassword}`);
   } catch (err) {
     console.error('❌ Erro ao tentar criar usuário admin padrão:', err);
@@ -74,7 +71,6 @@ mongoose
 
 // ----------------------------------------
 // CORS dinâmico
-// - aceita FRONTEND_URLS (separadas por vírgula) ou localhost sem origem
 // ----------------------------------------
 const FRONTEND_URLS = (process.env.FRONTEND_URL || '')
   .split(',')
@@ -85,7 +81,7 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin || origin.includes('localhost')) {
-        console.log('✔️  CORS allow (no-origin or localhost):', origin || 'no-origin');
+        console.log('✔️  CORS allow (no-origin ou localhost):', origin || 'no-origin');
         return callback(null, true);
       }
       if (FRONTEND_URLS.includes(origin)) {
@@ -114,12 +110,13 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushSubscriptionsRouter);
 
 // ----------------------------------------
-// Rotas de reservas (professor/admin)
+// ROTAS DE RESERVAS
 // ----------------------------------------
 
-// GET /api/reservas → retorna todas as reservas
+// GET /api/reservas → retorna todas as reservas (status/pendentes/aprovadas conforme quiser)
 app.get('/api/reservas', authenticateToken, async (_req, res) => {
   try {
+    // Para listar apenas aprovadas, use: { status: 'approved' }
     const all = await Reservation.find().sort({ date: 1, start: 1 });
     return res.json(all);
   } catch (err) {
@@ -158,7 +155,7 @@ app.post(
         type,
         responsible,
         department,
-        status: 'pending',
+        status: 'pending', // forçado como pendente
         description,
         time,
         title
@@ -173,7 +170,7 @@ app.post(
   }
 );
 
-// PUT /api/reservas/:id → atualiza reserva
+// PUT /api/reservas/:id → atualiza reserva (somente professor/admin)
 app.put(
   '/api/reservas/:id',
   authenticateToken,
@@ -190,7 +187,7 @@ app.put(
   }
 );
 
-// DELETE /api/reservas/:id → exclui reserva
+// DELETE /api/reservas/:id → exclui reserva (somente professor/admin)
 app.delete(
   '/api/reservas/:id',
   authenticateToken,
