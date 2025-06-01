@@ -3,7 +3,7 @@
 import express from 'express';
 import { authenticateToken, authorizeAdmin } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
-import Reservation from '../models/Reservation.js';
+import Reservation from '../models/reservation.js';
 
 const router = express.Router();
 
