@@ -28,10 +28,10 @@ router.get(
   }
 );
 
-// PATCH /api/admin/approve/:id
+// PATCH /api/admin/approve-user/:id
 // → Marca approved = true para o usuário especificado
 router.patch(
-  '/approve/:id',
+  '/approve-user/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
@@ -52,10 +52,10 @@ router.patch(
   }
 );
 
-// DELETE /api/admin/reject/:id
+// DELETE /api/admin/reject-user/:id
 // → Remove (ou rejeita) o usuário especificado
 router.delete(
-  '/reject/:id',
+  '/reject-user/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
