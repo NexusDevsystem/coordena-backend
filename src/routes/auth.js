@@ -18,26 +18,30 @@ router.post('/register', async (req, res) => {
     if (!estacioRegex.test(email)) {
       return res
         .status(400)
-        .json({ error: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
+        .json({ message: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
     }
 
     // 2) Verifica se já existe um usuário com este e-mail
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ error: 'E-mail já cadastrado.' });
+      return res.status(400).json({ message: 'E-mail já cadastrado.' });
     }
 
     // 3) Determina role (student ou professor)
     const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
-    // 4) Cria novo usuário com approved=false (pendente de aprovação)
-    const newUser = await User.create({
+    // 4) Cria novo usuário com status: "pending"
+    //    (mantemos o antigo campo `approved: false` para compatibilidade, mas
+    //     adicionamos `status: 'pending'` para uso no login)
+    const newUser = new User({
       name,
       email,
       password,       // o hash será gerado no pre('save') do model
       role,
-      approved: false // aguardando aprovação
+      approved: false,
+      status: 'pending'
     });
+    await newUser.save();
 
     // 5) Retorna apenas mensagem de sucesso (sem gerar token)
     return res.status(201).json({
@@ -45,7 +49,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (err) {
     console.error('[Auth Register] Error:', err);
-    return res.status(500).json({ error: 'Erro ao criar usuário.' });
+    return res.status(500).json({ message: 'Erro ao criar usuário.' });
   }
 });
 
@@ -62,24 +66,24 @@ router.post('/login', async (req, res) => {
     if (!estacioRegex.test(email)) {
       return res
         .status(400)
-        .json({ error: 'E-mail inválido. Use @alunos.estacio.br, @professor.estacio.br ou @admin.estacio.br.' });
+        .json({ message: 'E-mail inválido. Use @alunos.estacio.br, @professor.estacio.br ou @admin.estacio.br.' });
     }
 
-    // 3) Busca usuário pelo e-mail e inclui o campo 'password' (normalmente oculto)
-    const user = await User.findOne({ email }).select('+password');
+    // 3) Busca usuário pelo e-mail e inclui os campos 'password' e 'status'
+    const user = await User.findOne({ email }).select('+password +status');
     if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
     }
 
-    // 4) Se NÃO for admin e ainda não estiver aprovado, bloqueia
-    if (user.role !== 'admin' && !user.approved) {
+    // 4) Se NÃO for admin e não estiver com status "approved", bloqueia
+    if (user.role !== 'admin' && user.status !== 'approved') {
       return res
         .status(403)
-        .json({ error: 'Sua conta ainda não foi aprovada pelo administrador.' });
+        .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
     // 5) Caso ESPECIAL para o administrador usar sempre a senha "admin"
-    //    Se o user.role for "admin" e a senha que chegou no body for exatamente "admin",
+    //    Se user.role for "admin" e a senha que chegou no body for exatamente "admin",
     //    pulamos o bcrypt.compare e consideramos como senha válida.
     let isMatch = false;
     if (user.role === 'admin' && password === 'admin') {
@@ -90,7 +94,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!isMatch) {
-      return res.status(401).json({ error: 'Credenciais inválidas.' });
+      return res.status(401).json({ message: 'Credenciais inválidas.' });
     }
 
     // 7) Gera JWT
@@ -102,17 +106,16 @@ router.post('/login', async (req, res) => {
 
     // 8) Retorna usuário (sem senha) e token
     return res.json({
-      user: {
-        id:    user._id,
-        name:  user.name,
-        email: user.email,
-        role:  user.role
-      },
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
       token
     });
   } catch (err) {
     console.error('[Auth Login] Error:', err);
-    return res.status(500).json({ error: 'Erro no login.' });
+    return res.status(500).json({ message: 'Erro no login.' });
   }
 });
 
