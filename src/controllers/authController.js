@@ -47,7 +47,7 @@ export const registerUser = async (req, res) => {
       user.name = name;
       user.role = role;
       user.password = password;
-      // **Manter o campo `approved` como está (se já tinha sido aprovado ou não)**
+      // **Manter o campo `status` ou `approved` como está (se já tinha sido aprovado ou não)**
       await user.save();
 
       const token = generateToken(user._id, user.role);
@@ -56,17 +56,22 @@ export const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status, // podemos opcionalmente devolver o status atual
         token,
       });
     }
 
-    // **Cria novo usuário com approved: false (pendente)**
+    // **Cria novo usuário com status: "pending" (pendente)**
+    // Se você ainda está usando o campo booleano `approved`, mantenha-o, mas adicione o campo `status`:
     const newUser = new User({
       name,
       email: normalizedEmail,
       password, // pre-save hook no model fará o hash
       role,
-      approved: false, // pendente até o admin aprovar
+      // Caso o seu modelo ainda use apenas `approved: false`, deixe-o. 
+      // Mas vamos passar também `status: "pending"` para ficar compatível com a checagem de status:
+      approved: false, 
+      status: 'pending', 
     });
     await newUser.save();
 
@@ -75,7 +80,7 @@ export const registerUser = async (req, res) => {
     console.log(`→ Novo usuário pendente criado: ${newUser._id} (${newUser.email})`);
 
     // 1) Buscar todos os admins que já estão aprovados
-    const admins = await User.find({ role: 'admin', approved: true }).select('_id');
+    const admins = await User.find({ role: 'admin', status: 'approved' }).select('_id');
     const adminIds = admins.map((a) => a._id.toString());
     console.log(`→ IDs de admins aprovados: [${adminIds.join(', ')}]`);
 
@@ -125,6 +130,7 @@ export const registerUser = async (req, res) => {
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
+      status: newUser.status, // devolvemos o status "pending"
       token,
     });
   } catch (err) {
@@ -153,23 +159,38 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    // Busca usuário incluindo senha
-    const user = await User.findOne({ email: normalizedEmail }).select('+password');
-    if (!user || !(await user.matchPassword(password))) {
+    // Busca usuário incluindo senha e status
+    const user = await User.findOne({ email: normalizedEmail })
+      .select('+password +status'); 
+    if (!user) {
       return res.status(401).json({ message: 'E-mail ou senha incorretos' });
     }
 
-    // Opcional: só permitir login se o usuário já tiver sido aprovado (caso queira bloquear estudantes antes da aprovação)
-    // if (!user.approved && user.role !== 'professor') {
-    //   return res.status(403).json({ message: 'Usuário ainda não aprovado pelo administrador.' });
-    // }
+    // Verifica se a senha bate
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'E-mail ou senha incorretos' });
+    }
 
+    // **Aqui trocamos a checagem do booleano `approved` pela checagem de `status`**
+    if (user.status !== 'approved') {
+      return res
+        .status(403)
+        .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
+    }
+
+    // Se passou na validação, gera o JWT normalmente e devolve ao cliente
     const token = generateToken(user._id, user.role);
+
+    // Remover senha antes de enviar de volta (por segurança)
+    user.password = undefined;
+
     return res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
+      status: user.status,
       token,
     });
   } catch (err) {
