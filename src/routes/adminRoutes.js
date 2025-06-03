@@ -54,7 +54,7 @@ router.patch(
 );
 
 // PATCH /api/admin/reject-user/:id
-// → Altera status = 'rejected' para o usuário especificado (não deleta mais)
+// → Marca status = 'rejected' para o usuário especificado
 router.patch(
   '/reject-user/:id',
   authenticateToken,
@@ -90,7 +90,6 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
-      // Busca usuários com status "approved" ou "rejected", ordenados pelo updatedAt (mais recentes primeiro)
       const historico = await User.find({ status: { $in: ['approved', 'rejected'] } })
         .select('-password')           // não retornar campo password
         .sort({ updatedAt: -1 });
