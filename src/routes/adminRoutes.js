@@ -19,7 +19,6 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
-      // Agora filtramos por status: 'pending'
       const pendentes = await User.find({ status: 'pending' }).sort({ createdAt: 1 });
       return res.json(pendentes);
     } catch (err) {
