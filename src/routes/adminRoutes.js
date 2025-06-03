@@ -42,7 +42,6 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      // Atualiza o status para "approved"
       user.status = 'approved';
       await user.save();
       return res.json({ message: 'Usuário aprovado com sucesso.' });
@@ -67,7 +66,6 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      // Atualiza o status para "rejected"
       user.status = 'rejected';
       await user.save();
       return res.json({ message: 'Usuário rejeitado com sucesso.' });
@@ -79,7 +77,7 @@ router.patch(
 );
 
 /* ============================================
-   NOVA ROTA: Histórico de Usuários (aprovados + rejeitados)
+   NOVA ROTA: HISTÓRICO DE USUÁRIOS (approved + rejected)
    ============================================ */
 
 // GET /api/admin/users-history
@@ -90,9 +88,10 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
+      // Busca usuários com status aprovado ou rejeitado
       const historico = await User.find({ status: { $in: ['approved', 'rejected'] } })
-        .select('-password')           // não retornar campo password
-        .sort({ updatedAt: -1 });
+        .select('-password') // não retornar campo password
+        .sort({ updatedAt: -1 }); // ordena pelo mais recentemente atualizado
 
       return res.json(historico);
     } catch (err) {
@@ -101,7 +100,6 @@ router.get(
     }
   }
 );
-
 
 /* ============================================
    ROTAS PARA RESERVAS PENDENTES
