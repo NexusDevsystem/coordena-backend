@@ -9,7 +9,7 @@ import bcrypt from 'bcryptjs';
 // Regex institucional Estácio (alunos e professores)
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
-// Gera o JWT com payload id e role
+// Gera o JWT com payload { id, role }
 const generateToken = (id, role) => {
   if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET não definido');
@@ -43,11 +43,11 @@ export const registerUser = async (req, res) => {
     let user = await User.findOne({ email: normalizedEmail });
 
     if (user) {
-      // **Se já existe, apenas atualiza nome, role e senha (re‐hash será feito pelo pre‐save hook)**
+      // Se já existe, apenas atualiza nome, role e senha (re‐hash no hook do schema)
       user.name = name;
       user.role = role;
       user.password = password;
-      // **Manter o campo `status` ou `approved` como está (se já tinha sido aprovado ou não)**
+      // ** NÃO alteramos `status` aqui, deixamos como está (pendente, approved ou rejected )**
       await user.save();
 
       const token = generateToken(user._id, user.role);
@@ -56,48 +56,39 @@ export const registerUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        status: user.status, // podemos opcionalmente devolver o status atual
+        status: user.status, // devolve o status atual
         token,
       });
     }
 
-    // **Cria novo usuário com status: "pending" (pendente)**
-    // Se você ainda está usando o campo booleano `approved`, mantenha-o, mas adicione o campo `status`:
+    // Se for novo usuário, criamos com status: "pending"
     const newUser = new User({
       name,
       email: normalizedEmail,
-      password, // pre-save hook no model fará o hash
+      password, // o pre-save hook irá gerar o hash
       role,
-      // Caso o seu modelo ainda use apenas `approved: false`, deixe-o. 
-      // Mas vamos passar também `status: "pending"` para ficar compatível com a checagem de status:
-      approved: false, 
-      status: 'pending', 
+      status: 'pending' // por padrão, pendente até o admin aprovar
     });
     await newUser.save();
 
-    // **A partir daqui, disparamos o push para os admins**
+    console.log(`→ Novo usuário pendente: ${newUser._id} (${newUser.email})`);
 
-    console.log(`→ Novo usuário pendente criado: ${newUser._id} (${newUser.email})`);
-
-    // 1) Buscar todos os admins que já estão aprovados
+    // --- Envia push para todos os admins aprovados ---
     const admins = await User.find({ role: 'admin', status: 'approved' }).select('_id');
-    const adminIds = admins.map((a) => a._id.toString());
-    console.log(`→ IDs de admins aprovados: [${adminIds.join(', ')}]`);
+    const adminIds = admins.map(a => a._id.toString());
+    console.log(`→ Admins aprovados encontrados: [${adminIds.join(', ')}]`);
 
-    // 2) Buscar todas as subscriptions desses admins
     const subs = await PushSubscription.find({ userId: { $in: adminIds } });
-    console.log(`→ Encontrei ${subs.length} subscription(s) de admin(es).`);
+    console.log(`→ Subscriptions de admins: ${subs.length}`);
 
-    // 3) Montar payload da notificação
     const payload = JSON.stringify({
       title: 'Nova solicitação de cadastro',
       body: `${newUser.name} solicitou acesso.`,
       data: { url: '/pages/admin.html' },
     });
 
-    // 4) Enviar push para cada subscription
-    subs.forEach((sub) => {
-      console.log(`→ Tentando enviar push para endpoint: ${sub.endpoint}`);
+    subs.forEach(sub => {
+      console.log(`→ Enviando push para: ${sub.endpoint}`);
       sendPushNotification(
         {
           endpoint: sub.endpoint,
@@ -106,31 +97,30 @@ export const registerUser = async (req, res) => {
         payload
       )
         .then(() => {
-          console.log('   ✔ Enviado com sucesso!');
+          console.log('   ✔ Push enviado com sucesso!');
         })
-        .catch((err) => {
-          console.error('   ❌ Falha ao enviar push para:', sub.endpoint, err);
-          // Opcional: se err.statusCode for 410/404 (subscription inválida), remova do banco:
+        .catch(err => {
+          console.error('   ❌ Falha ao enviar push:', sub.endpoint, err);
           if (err.statusCode === 410 || err.statusCode === 404) {
             PushSubscription.deleteOne({ _id: sub._id })
               .then(() =>
-                console.log(`   • Subscription removida (${sub.endpoint}) pois está inválida.`)
+                console.log(`   • Subscription removida (${sub.endpoint}) inválida.`)
               )
-              .catch((e) =>
+              .catch(e =>
                 console.error('   • Erro ao remover subscription inválida:', e)
               );
           }
         });
     });
 
-    // 5) Retorna a resposta de registro
+    // Retorna a resposta de registro
     const token = generateToken(newUser._id, newUser.role);
     return res.status(201).json({
       _id: newUser._id,
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
-      status: newUser.status, // devolvemos o status "pending"
+      status: newUser.status,
       token,
     });
   } catch (err) {
@@ -151,7 +141,6 @@ export const loginUser = async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    // Validação de domínio institucional
     if (!estacioRegex.test(normalizedEmail)) {
       return res.status(400).json({
         message:
@@ -161,28 +150,29 @@ export const loginUser = async (req, res) => {
 
     // Busca usuário incluindo senha e status
     const user = await User.findOne({ email: normalizedEmail })
-      .select('+password +status'); 
+      .select('+password +status');
+
     if (!user) {
       return res.status(401).json({ message: 'E-mail ou senha incorretos' });
     }
 
-    // Verifica se a senha bate
+    // Valida a senha
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'E-mail ou senha incorretos' });
     }
 
-    // **Aqui trocamos a checagem do booleano `approved` pela checagem de `status`**
+    // Agora só permite login se status for exatamente 'approved'
     if (user.status !== 'approved') {
       return res
         .status(403)
         .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
-    // Se passou na validação, gera o JWT normalmente e devolve ao cliente
+    // Se chegou até aqui, gera o token e devolve dados
     const token = generateToken(user._id, user.role);
 
-    // Remover senha antes de enviar de volta (por segurança)
+    // Remove a senha do objeto para não enviar junto
     user.password = undefined;
 
     return res.json({
