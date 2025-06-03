@@ -8,18 +8,19 @@ import Reservation from '../models/reservation.js';
 const router = express.Router();
 
 /* ============================================
-   ROTAS PARA USUÁRIOS PENDENTES
+   ROTAS PARA USUÁRIOS PENDENTES (status: 'pending')
    ============================================ */
 
 // GET /api/admin/pending-users
-// → Retorna todos os usuários com approved: false
+// → Retorna todos os usuários com status: 'pending'
 router.get(
   '/pending-users',
   authenticateToken,
   authorizeAdmin,
   async (_req, res) => {
     try {
-      const pendentes = await User.find({ approved: false }).sort({ createdAt: 1 });
+      // Agora filtramos por status: 'pending'
+      const pendentes = await User.find({ status: 'pending' }).sort({ createdAt: 1 });
       return res.json(pendentes);
     } catch (err) {
       console.error('Erro ao buscar usuários pendentes:', err);
@@ -29,7 +30,7 @@ router.get(
 );
 
 // PATCH /api/admin/approve-user/:id
-// → Marca approved = true para o usuário especificado
+// → Marca status = 'approved' para o usuário especificado
 router.patch(
   '/approve-user/:id',
   authenticateToken,
@@ -42,7 +43,8 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      user.approved = true;
+      // Atualiza o status para "approved"
+      user.status = 'approved';
       await user.save();
       return res.json({ message: 'Usuário aprovado com sucesso.' });
     } catch (err) {
@@ -52,9 +54,9 @@ router.patch(
   }
 );
 
-// DELETE /api/admin/reject-user/:id
-// → Remove (ou rejeita) o usuário especificado
-router.delete(
+// PATCH /api/admin/reject-user/:id
+// → Altera status = 'rejected' para o usuário especificado (não deleta mais)
+router.patch(
   '/reject-user/:id',
   authenticateToken,
   authorizeAdmin,
@@ -66,11 +68,38 @@ router.delete(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      await User.findByIdAndDelete(userId);
-      return res.json({ message: 'Usuário rejeitado e excluído com sucesso.' });
+      // Atualiza o status para "rejected"
+      user.status = 'rejected';
+      await user.save();
+      return res.json({ message: 'Usuário rejeitado com sucesso.' });
     } catch (err) {
       console.error(`Erro ao rejeitar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar usuário.' });
+    }
+  }
+);
+
+/* ============================================
+   NOVA ROTA: Histórico de Usuários (aprovados + rejeitados)
+   ============================================ */
+
+// GET /api/admin/users-history
+// → Retorna todos os usuários cujo status esteja em ['approved','rejected']
+router.get(
+  '/users-history',
+  authenticateToken,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      // Busca usuários com status "approved" ou "rejected", ordenados pelo updatedAt (mais recentes primeiro)
+      const historico = await User.find({ status: { $in: ['approved', 'rejected'] } })
+        .select('-password')           // não retornar campo password
+        .sort({ updatedAt: -1 });
+
+      return res.json(historico);
+    } catch (err) {
+      console.error('Erro ao buscar histórico de usuários:', err);
+      return res.status(500).json({ error: 'Erro ao buscar histórico de usuários.' });
     }
   }
 );
