@@ -19,7 +19,6 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
-      // Agora filtramos por status: 'pending'
       const pendentes = await User.find({ status: 'pending' }).sort({ createdAt: 1 });
       return res.json(pendentes);
     } catch (err) {
@@ -43,7 +42,6 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      // Atualiza o status para "approved"
       user.status = 'approved';
       await user.save();
       return res.json({ message: 'Usuário aprovado com sucesso.' });
@@ -55,7 +53,7 @@ router.patch(
 );
 
 // PATCH /api/admin/reject-user/:id
-// → Altera status = 'rejected' para o usuário especificado (não deleta mais)
+// → Marca status = 'rejected' para o usuário especificado
 router.patch(
   '/reject-user/:id',
   authenticateToken,
@@ -68,7 +66,6 @@ router.patch(
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
 
-      // Atualiza o status para "rejected"
       user.status = 'rejected';
       await user.save();
       return res.json({ message: 'Usuário rejeitado com sucesso.' });
@@ -80,7 +77,7 @@ router.patch(
 );
 
 /* ============================================
-   NOVA ROTA: Histórico de Usuários (aprovados + rejeitados)
+   NOVA ROTA: HISTÓRICO DE USUÁRIOS (approved + rejected)
    ============================================ */
 
 // GET /api/admin/users-history
@@ -91,10 +88,10 @@ router.get(
   authorizeAdmin,
   async (_req, res) => {
     try {
-      // Busca usuários com status "approved" ou "rejected", ordenados pelo updatedAt (mais recentes primeiro)
+      // Busca usuários com status aprovado ou rejeitado
       const historico = await User.find({ status: { $in: ['approved', 'rejected'] } })
-        .select('-password')           // não retornar campo password
-        .sort({ updatedAt: -1 });
+        .select('-password') // não retornar campo password
+        .sort({ updatedAt: -1 }); // ordena pelo mais recentemente atualizado
 
       return res.json(historico);
     } catch (err) {
@@ -103,7 +100,6 @@ router.get(
     }
   }
 );
-
 
 /* ============================================
    ROTAS PARA RESERVAS PENDENTES
