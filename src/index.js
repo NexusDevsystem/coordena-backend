@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 
 // → NOVO: importe o router de Push Subscriptions
 import pushSubscriptionsRouter from './routes/pushSubscriptions.js';
+
 import Reservation from './models/reservation.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/adminRoutes.js';
@@ -20,7 +21,6 @@ const app          = express();
 const PORT         = process.env.PORT || 10000;
 const MONGO_URI    = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
-
 
 // ----------------------------------------
 // Função seedAdmin(): cria um admin padrão
@@ -132,6 +132,18 @@ app.get('/api/reservations', authenticateToken, async (_req, res) => {
   }
 });
 
+// → NOVA ROTA: GET → retorna todos os agendamentos (independentemente de status) do usuário logado
+app.get('/api/reservations/me', authenticateToken, async (req, res) => {
+  try {
+    // Filtra pelo campo “responsible” igual ao nome armazenado em req.user.name
+    const myReservations = await Reservation.find({ responsible: req.user.name }).sort({ date: 1, start: 1 });
+    return res.json(myReservations);
+  } catch (err) {
+    console.error('Erro ao buscar meus agendamentos:', err);
+    return res.status(500).json({ error: 'Erro ao buscar meus agendamentos' });
+  }
+});
+
 // POST → cria uma nova reserva (sempre com status: 'pending')
 app.post(
   '/api/reservations',
@@ -146,7 +158,7 @@ app.post(
         resource,
         sala = '',
         type,
-        responsible,
+        // remover “responsible” vindo do body
         department,
         description = '',
         time,
@@ -160,9 +172,9 @@ app.post(
         resource,
         sala,
         type,
-        responsible,
+        responsible: req.user.name,   // ← sempre “responsible” do token
         department,
-        status: 'pending',   // <–– sempre “pending”
+        status: 'pending',             // ← sempre “pending”
         description,
         time,
         title
