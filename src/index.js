@@ -121,16 +121,14 @@ app.use('/api/push', pushSubscriptionsRouter);
 // ----------------------------------------
 
 // GET → retorna todas as reservas aprovadas
-app.get('/api/reservations', authenticateToken, async (req, res) => {
+app.get('/api/reservations', authenticateToken, async (_req, res) => {
   try {
-    // Busca TODAS as reservas deste usuário, independentemente do status.
-    // Aqui assumimos que 'r.responsible' foi gravado como 'user.name' na criação.
-    const todasDoUsuario = await Reservation
-      .find({ responsible: req.user.name })
+    const approved = await Reservation
+      .find({ status: 'approved' })       // só “approved”
       .sort({ date: 1, start: 1 });
-    return res.json(todasDoUsuario);
+    return res.json(approved);
   } catch (err) {
-    console.error('Erro ao buscar reservas do usuário:', err);
+    console.error('Erro ao buscar reservas aprovadas:', err);
     return res.status(500).json({ error: 'Erro ao buscar reservas' });
   }
 });
