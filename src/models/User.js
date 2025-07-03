@@ -9,51 +9,50 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true
     },
-    email: {
+
+    // E-mail institucional (antigo "email")
+    institutionalEmail: {
       type: String,
       required: true,
       unique: true
     },
+
+    // Novo campo: e-mail pessoal (para receber notificações)
+    personalEmail: {
+      type: String,
+      required: true,
+      unique: true
+    },
+
     password: {
       type: String,
       required: true,
-      select: false // não retorna por padrão
+      select: false
     },
     role: {
       type: String,
       enum: ['student', 'professor', 'admin'],
       default: 'student'
     },
-    /**
-     * Em vez de "approved: Boolean", usamos agora um campo ENUM:
-     * status ∈ { 'pending', 'approved', 'rejected' }
-     * O default é "pending", pois todo cadastro novo deve aguardar aprovação.
-     */
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending'
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now
     }
   },
   {
-    // Para que o Mongoose adicione timestamps automáticos:
-    // createdAt e updatedAt serão gerenciados automaticamente.
     timestamps: true
   }
 );
 
-// Antes de salvar (pre-save), se a senha foi alterada, faz o hash
+// Hash da senha antes de salvar
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
-// Método auxiliar para comparar senha em login
+// Método para comparar senha no login
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };

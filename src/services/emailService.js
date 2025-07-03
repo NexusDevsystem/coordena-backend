@@ -14,6 +14,7 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendUserNotification(user, type, reason = '') {
+  const to = user.personalEmail || user.institutionalEmail;
   const subjects = {
     approved:  'Bem-vindo ao Coordena+!',
     rejected:  'Cadastro rejeitado no Coordena+'
@@ -24,13 +25,14 @@ export async function sendUserNotification(user, type, reason = '') {
   };
   await transporter.sendMail({
     from:    process.env.EMAIL_FROM,
-    to:      user.email,
+    to,
     subject: subjects[type],
     text:    bodies[type]
   });
 }
 
 export async function sendReservationNotification(reservation, user, type, reason = '') {
+  const to = user.personalEmail || user.institutionalEmail;
   const subjects = {
     approved:  `Reserva aprovada em ${reservation.date}`,
     rejected:  `Reserva rejeitada em ${reservation.date}`
@@ -41,7 +43,7 @@ export async function sendReservationNotification(reservation, user, type, reaso
   };
   await transporter.sendMail({
     from:    process.env.EMAIL_FROM,
-    to:      user.email,
+    to,
     subject: subjects[type],
     text:    bodies[type]
   });
