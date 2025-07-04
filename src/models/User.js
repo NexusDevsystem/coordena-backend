@@ -51,21 +51,23 @@ export const registerUser = async (req, res) => {
     // 4) se já existir usuário institucional, atualiza e retorna
     let user = await User.findOne({ institutionalEmail: instEmail }).select('+status');
     if (user) {
-      user.name              = name;
-      user.registration      = registration;
-      user.password          = password;  // pre-save faz hash
-      user.role              = role;
+      user.name               = name;
+      user.registration       = registration;
+      user.institutionalEmail = instEmail;
+      user.personalEmail      = persEmail;    // atualiza o e-mail pessoal também
+      user.password           = password;     // pre-save hook faz hash
+      user.role               = role;
       await user.save();
 
       const token = generateToken(user._id, user.role);
       return res.json({
-        _id:               user._id,
-        name:              user.name,
-        registration:      user.registration,
-        institutionalEmail:user.institutionalEmail,
-        personalEmail:     user.personalEmail,
-        role:              user.role,
-        status:            user.status,
+        _id:                user._id,
+        name:               user.name,
+        registration:       user.registration,
+        institutionalEmail: user.institutionalEmail,
+        personalEmail:      user.personalEmail,
+        role:               user.role,
+        status:             user.status,
         token
       });
     }
@@ -107,13 +109,13 @@ export const registerUser = async (req, res) => {
     // 7) retorna dados e token
     const token = generateToken(newUser._id, newUser.role);
     return res.status(201).json({
-      _id:               newUser._id,
-      name:              newUser.name,
-      registration:      newUser.registration,
-      institutionalEmail:newUser.institutionalEmail,
-      personalEmail:     newUser.personalEmail,
-      role:              newUser.role,
-      status:            newUser.status,
+      _id:                newUser._id,
+      name:               newUser.name,
+      registration:       newUser.registration,
+      institutionalEmail: newUser.institutionalEmail,
+      personalEmail:      newUser.personalEmail,
+      role:               newUser.role,
+      status:             newUser.status,
       token
     });
   } catch (err) {
@@ -164,13 +166,13 @@ export const loginUser = async (req, res) => {
     user.password = undefined;
 
     return res.json({
-      _id:               user._id,
-      name:              user.name,
-      registration:      user.registration,
-      institutionalEmail:user.institutionalEmail,
-      personalEmail:     user.personalEmail,
-      role:              user.role,
-      status:            user.status,
+      _id:                user._id,
+      name:               user.name,
+      registration:       user.registration,
+      institutionalEmail: user.institutionalEmail,
+      personalEmail:      user.personalEmail,
+      role:               user.role,
+      status:             user.status,
       token
     });
   } catch (err) {
