@@ -1,5 +1,4 @@
 // backend/src/models/User.js
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -10,7 +9,7 @@ const userSchema = new mongoose.Schema(
       required: true
     },
 
-    // Matrícula
+    // Novo campo de matrícula  
     registration: {
       type: String,
       required: true,
@@ -24,7 +23,7 @@ const userSchema = new mongoose.Schema(
       unique: true
     },
 
-    // E-mail pessoal (para notificações)
+    // E-mail pessoal
     personalEmail: {
       type: String,
       required: true,
@@ -39,13 +38,13 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ['student', 'professor', 'admin'],
+      enum: ['student','professor','admin'],
       default: 'student'
     },
 
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['pending','approved','rejected'],
       default: 'pending'
     }
   },
@@ -54,18 +53,15 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash da senha antes de salvar
-userSchema.pre('save', async function (next) {
+// hash da senha
+userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
-// Método para comparar senha no login
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return bcrypt.compare(enteredPassword, this.password);
+userSchema.methods.matchPassword = function(entered) {
+  return bcrypt.compare(entered, this.password);
 };
 
-// Cria e exporta o modelo como default
-const User = mongoose.model('User', userSchema);
-export default User;
+export default mongoose.model('User', userSchema);
