@@ -36,9 +36,9 @@ export const registerUser = async (req, res) => {
     }
 
     // 2) normaliza valores
-    const reg   = registration.trim();
-    const instEmail = institutionalEmail.trim().toLowerCase();
-    const persEmail = personalEmail.trim().toLowerCase();
+    const reg        = registration.trim();
+    const instEmail  = institutionalEmail.trim().toLowerCase();
+    const persEmail  = personalEmail.trim().toLowerCase();
 
     // 3) valida domínio institucional
     if (!estacioRegex.test(instEmail)) {
@@ -48,10 +48,10 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // 4) define role automaticamente pelo domínio institucional
+    // 4) define role automaticamente
     const role = instEmail.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
-    // 5) se já existir usuário institucional, atualiza e retorna
+    // 5) se já existir, atualiza
     let user = await User.findOne({ institutionalEmail: instEmail }).select('+status');
     if (user) {
       user.name         = name;
@@ -81,14 +81,14 @@ export const registerUser = async (req, res) => {
       personalEmail:      persEmail,
       password,
       role,
-      status: 'pending'
+      status:             'pending'
     });
     await newUser.save();
 
     // 7) notifica admins via push
-    const admins = await User.find({ role: 'admin', status: 'approved' }).select('_id');
+    const admins   = await User.find({ role: 'admin', status: 'approved' }).select('_id');
     const adminIds = admins.map(a => a._id.toString());
-    const subs = await PushSubscription.find({ userId: { $in: adminIds } });
+    const subs     = await PushSubscription.find({ userId: { $in: adminIds } });
 
     const payload = JSON.stringify({
       title: 'Nova solicitação de cadastro',
@@ -130,15 +130,44 @@ export const registerUser = async (req, res) => {
 
 /**
  * POST /api/auth/login
+ *
+ * Suporta:
+ *  - login “super-admin” com usuário “admin” + senha “admin123”
+ *    → não exige e-mail, retorna token admin.
+ *  - login comum, via campo `email` ou `institutionalEmail`.
  */
 export const loginUser = async (req, res) => {
   try {
-    const { institutionalEmail, password } = req.body;
-    if (!institutionalEmail || !password) {
+    // leio tanto `institutionalEmail` (controller) quanto `email` (frontend)
+    const rawEmail = (req.body.institutionalEmail || req.body.email || '').trim();
+    const password = req.body.password;
+
+    if (!rawEmail || !password) {
       return res.status(400).json({ message: 'Preencha todos os campos' });
     }
 
-    const instEmail = institutionalEmail.trim().toLowerCase();
+    const instEmail = rawEmail.toLowerCase();
+
+    // ─── 1) Super-admin fixo: "admin" / "admin123" ─────────────────────────────
+    if (instEmail === 'admin') {
+      if (password !== 'admin123') {
+        return res.status(401).json({ message: 'Credenciais inválidas' });
+      }
+      // Em um cenário real você talvez queira buscar um _id real - aqui usamos "admin"
+      const token = generateToken('admin', 'admin');
+      return res.json({
+        _id:                'admin',
+        name:               'admin',
+        registration:       null,
+        institutionalEmail: null,
+        personalEmail:      null,
+        role:               'admin',
+        status:             'approved',
+        token
+      });
+    }
+
+    // ─── 2) Caso normal: valida e-mail institucional ─────────────────────────────
     if (!estacioRegex.test(instEmail)) {
       return res.status(400).json({
         message:
@@ -146,23 +175,27 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    // 3) Busca usuário no banco
     const user = await User.findOne({ institutionalEmail: instEmail })
       .select('+password +status +personalEmail');
     if (!user) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
+    // 4) Valida senha
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
+    // 5) Só usuários aprovados
     if (user.status !== 'approved') {
       return res
         .status(403)
         .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
+    // 6) Gera e retorna token
     const token = generateToken(user._id, user.role);
     user.password = undefined;
 
