@@ -8,8 +8,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
 
 // ----------------------------------------------------
 // POST /api/auth/login
-// - aceita login por e-mail (padrão)
-// - se quiser permitir username também, manda no body
+// - aceita login por e-mail OU username
+// - BLOQUEIA login se status !== 'active'
 // ----------------------------------------------------
 router.post("/login", async (req, res) => {
   try {
@@ -23,12 +23,12 @@ router.post("/login", async (req, res) => {
 
     // Prioriza username se veio
     if (username) {
-      user = await User.findOne({ username: username.toString().trim() });
+      user = await User.findOne({ username: String(username).trim() });
     }
 
     // Se não achou por username (ou não veio), tenta por e-mail
     if (!user && email) {
-      user = await User.findOne({ email: email.toString().trim().toLowerCase() });
+      user = await User.findOne({ email: String(email).trim().toLowerCase() });
     }
 
     if (!user) {
@@ -40,10 +40,10 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Senha inválida." });
     }
 
-    // (Opcional) bloquear login enquanto pendente
-    // if (user.status === "pending") {
-    //   return res.status(403).json({ error: "Conta pendente de aprovação." });
-    // }
+    // 🔒 Bloqueio: só permite login com status 'active'
+    if (user.status !== "active") {
+      return res.status(403).json({ error: "Conta pendente de aprovação do administrador." });
+    }
 
     const token = jwt.sign(
       {
@@ -76,7 +76,7 @@ router.post("/login", async (req, res) => {
 // ----------------------------------------------------
 // POST /api/auth/register
 // - aceita { name, matricula, password, email? }
-// - cria usuário como 'user' e 'pending' (para aprovação)
+// - cria usuário como 'professor' e 'pending' (para aprovação)
 // - impede duplicidade por email ou matrícula
 // ----------------------------------------------------
 router.post("/register", async (req, res) => {
@@ -109,7 +109,7 @@ router.post("/register", async (req, res) => {
       return res.status(409).json({ error: "Matrícula já cadastrada." });
     }
 
-    // username = matricula (pode ajustar conforme seu modelo)
+    // username = matricula (ajuste se quiser outra regra)
     const username = matricula;
 
     const hash = await bcrypt.hash(password, 10);
@@ -120,8 +120,8 @@ router.post("/register", async (req, res) => {
       matricula,
       username,
       password: hash,
-      role: "user",
-      status: "pending", // pendente até o admin aprovar
+      role: "professor",     // ✅ agora professor
+      status: "pending",     // ✅ pendente até o admin aprovar
     });
 
     return res.status(201).json({
