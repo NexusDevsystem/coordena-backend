@@ -23,41 +23,84 @@ const MONGO_URI    = process.env.MONGO_URI;
 const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 
 // ----------------------------------------
-// Função seedAdmin(): cria um admin padrão
+// Função seedAdmin(): garante admin com email e username corretos
 // ----------------------------------------
+import bcrypt from 'bcryptjs';
+import User from './models/User.js'; // ajuste o caminho se necessário
+
 async function seedAdmin() {
-  const DEFAULT_ADMIN = {
-    name: 'Administrador Coordena',
-    username: 'admin@admin.estacio.br',
-    rawPassword: 'admin',
-    role: 'admin'
-  };
+  const NAME      = 'Administrador Coordena';
+  const EMAIL     = 'admin@admin.estacio.br';      // login usa este e-mail
+  const USERNAME  = 'admin';                        // username curto
+  const ROLE      = 'admin';
+  const RAW_PASS  = 'admin';                        // troque depois via UI
 
   try {
-    const existing = await User.findOne({ username: DEFAULT_ADMIN.username, role: 'admin' });
-    if (existing) {
-      console.log('ℹ️  Usuário admin já existe, não será recriado.');
+    const email = EMAIL.trim().toLowerCase();
+    const username = USERNAME.trim().toLowerCase();
+
+    // 1) Se já existe admin com email OU username padrão, normaliza campos (migração leve)
+    let admin = await User.findOne({
+      role: ROLE,
+      $or: [{ email }, { username }]
+    }).select('+password');
+
+    if (admin) {
+      let needsUpdate = false;
+
+      if (admin.email !== email) {
+        admin.email = email;
+        needsUpdate = true;
+      }
+      if (admin.username !== username) {
+        admin.username = username;
+        needsUpdate = true;
+      }
+      if (admin.role !== ROLE) {
+        admin.role = ROLE;
+        needsUpdate = true;
+      }
+      if (admin.approved !== true && typeof admin.approved !== 'undefined') {
+        admin.approved = true;
+        needsUpdate = true;
+      }
+      // garante nome
+      if (admin.name !== NAME) {
+        admin.name = NAME;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await admin.save();
+        console.log('ℹ️  Admin existente normalizado (email/username/role/approved).');
+      } else {
+        console.log('ℹ️  Usuário admin já existente e consistente.');
+      }
       return;
     }
 
-    const hashed = await bcrypt.hash(DEFAULT_ADMIN.rawPassword, 10);
-
+    // 2) Se não existe, cria do zero
+    const hash = await bcrypt.hash(RAW_PASS, 10);
     await User.create({
-      name: DEFAULT_ADMIN.name,
-      username: DEFAULT_ADMIN.username,
-      password: hashed,
-      role: DEFAULT_ADMIN.role,
-      approved: true // admin já nasce aprovado
-      // sem email mesmo — permitido pelo schema
+      name: NAME,
+      email,
+      username,
+      role: ROLE,
+      approved: true,     // ou status: 'approved'
+      password: hash
     });
 
     console.log('✅ Usuário admin padrão criado:');
-    console.log(`   → Usuário: ${DEFAULT_ADMIN.username}`);
-    console.log(`   → Senha:   ${DEFAULT_ADMIN.rawPassword}`);
+    console.log(`   → Email:    ${email}`);
+    console.log(`   → Username: ${username}`);
+    console.log(`   → Senha:    ${RAW_PASS}`);
   } catch (err) {
-    console.error('❌ Erro ao tentar criar usuário admin padrão:', err);
+    console.error('❌ Erro ao tentar criar/normalizar o admin:', err);
   }
 }
+
+export default seedAdmin;
+
 
 // ----------------------------------------
 // CORS dinâmico
