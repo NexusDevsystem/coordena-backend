@@ -1,3 +1,4 @@
+// routes/auth.js
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -6,52 +7,40 @@ import User from "../models/User.js";
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
 
-// ----------------------------------------------------
-// POST /api/auth/login
-// - aceita login por e-mail OU username
-// - BLOQUEIA login se status !== 'active'
-// ----------------------------------------------------
+function isProfessorEmail(email = "") {
+  return String(email).toLowerCase().endsWith("@professor.estacio.br");
+}
+
+// LOGIN: bloqueia pendente
 router.post("/login", async (req, res) => {
   try {
     const { email, password, username } = req.body;
-
     if (!password || (!email && !username)) {
       return res.status(400).json({ error: "Informe usuário e senha." });
     }
 
     let user = null;
+    if (username) user = await User.findOne({ username: String(username).trim() });
+    if (!user && email) user = await User.findOne({ email: String(email).trim().toLowerCase() });
 
-    // Prioriza username se veio
-    if (username) {
-      user = await User.findOne({ username: String(username).trim() });
-    }
-
-    // Se não achou por username (ou não veio), tenta por e-mail
-    if (!user && email) {
-      user = await User.findOne({ email: String(email).trim().toLowerCase() });
-    }
-
-    if (!user) {
-      return res.status(401).json({ error: "Usuário não encontrado." });
-    }
+    if (!user) return res.status(401).json({ error: "Usuário não encontrado." });
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ error: "Senha inválida." });
+    if (!valid) return res.status(401).json({ error: "Senha inválida." });
+
+    // 🔒 Bloqueia enquanto pendente
+    if (user.status !== "active") {
+      return res.status(403).json({ error: "Sua conta está pendente. Aguarde até 24h para aprovação." });
     }
 
-    // 🔒 Bloqueio: só permite login com status 'active'
-    if (user.status !== "active") {
-      return res.status(403).json({ error: "Conta pendente de aprovação do administrador." });
+    // Garante role “professor” para e-mail professor.estacio.br (caso tenha sido ajustado depois)
+    if (user.email && isProfessorEmail(user.email) && user.role !== "admin" && user.role !== "professor") {
+      user.role = "professor";
+      await user.save();
     }
 
     const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-        username: user.username,
-        email: user.email || null,
-      },
+      { id: user._id, role: user.role, username: user.username, email: user.email || null },
       JWT_SECRET,
       { expiresIn: "12h" }
     );
@@ -64,7 +53,7 @@ router.post("/login", async (req, res) => {
         username: user.username,
         email: user.email || null,
         role: user.role,
-        status: user.status || "active",
+        status: user.status,
       },
     });
   } catch (err) {
@@ -73,12 +62,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// ----------------------------------------------------
-// POST /api/auth/register
-// - aceita { name, matricula, password, email? }
-// - cria usuário como 'professor' e 'pending' (para aprovação)
-// - impede duplicidade por email ou matrícula
-// ----------------------------------------------------
+// REGISTER: cria pendente; define role=professor para e-mails @professor.estacio.br
 router.post("/register", async (req, res) => {
   try {
     let { name, matricula, password, email } = req.body || {};
@@ -91,42 +75,35 @@ router.post("/register", async (req, res) => {
     if (!name || !matricula || !password) {
       return res.status(400).json({ error: "Preencha nome, matrícula e senha." });
     }
-
     if (password.length < 6) {
       return res.status(400).json({ error: "A senha deve ter pelo menos 6 caracteres." });
     }
 
-    // Checagens de duplicidade (email opcional)
     if (email) {
       const emailExists = await User.findOne({ email });
-      if (emailExists) {
-        return res.status(409).json({ error: "E-mail já cadastrado." });
-      }
+      if (emailExists) return res.status(409).json({ error: "E-mail já cadastrado." });
     }
 
     const matriculaExists = await User.findOne({ matricula });
-    if (matriculaExists) {
-      return res.status(409).json({ error: "Matrícula já cadastrada." });
-    }
+    if (matriculaExists) return res.status(409).json({ error: "Matrícula já cadastrada." });
 
-    // username = matricula (ajuste se quiser outra regra)
     const username = matricula;
-
     const hash = await bcrypt.hash(password, 10);
 
+    const role = isProfessorEmail(email) ? "professor" : "professor"; // default fica professor
     const user = await User.create({
       name,
       email: email || undefined,
       matricula,
       username,
       password: hash,
-      role: "professor",     // ✅ agora professor
-      status: "pending",     // ✅ pendente até o admin aprovar
+      role,                 // “professor” (ou mude aqui se quiser tratar aluno depois)
+      status: "pending",    // pendente até o admin aprovar
     });
 
     return res.status(201).json({
       ok: true,
-      message: "Cadastro enviado para aprovação.",
+      message: "Solicitação enviada. Aguarde até 24h para aprovação do administrador.",
       user: {
         id: user._id,
         name: user.name,
