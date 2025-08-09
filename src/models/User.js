@@ -7,8 +7,7 @@ const UserSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
 
-    // Matrícula obrigatória
-    // (não use unique aqui; o índice único é criado abaixo com filtro parcial)
+    // Matrícula obrigatória (índice único é criado abaixo com filtro parcial)
     matricula: {
       type: String,
       required: true,
@@ -19,14 +18,11 @@ const UserSchema = new mongoose.Schema(
       },
     },
 
-    // Username único — padrão: a própria matrícula
+    // Username único — garantido por hook (não usar default que acessa this)
     username: {
       type: String,
       required: true,
       trim: true,
-      default: function () {
-        return this.matricula;
-      },
       set: (v) => {
         const s = (v ?? "").toString().trim();
         return s || undefined;
@@ -75,10 +71,7 @@ const UserSchema = new mongoose.Schema(
 );
 
 /**
- * ÍNDICES
- * - matricula: único apenas quando existe e é string (evita duplicidade de null/“”)
- * - username: único (é obrigatório)
- * - email: único apenas quando existe e é string
+ * Índices
  */
 UserSchema.index(
   { matricula: 1 },
@@ -109,7 +102,15 @@ UserSchema.index(
   }
 );
 
-// Normalizações finais
+// Hook para garantir username a partir da matrícula quando não for informado
+UserSchema.pre("validate", function (next) {
+  if (!this.username && this.matricula) {
+    this.username = this.matricula;
+  }
+  next();
+});
+
+// Normalizações finais antes de salvar
 UserSchema.pre("save", function (next) {
   if (this.email) this.email = this.email.trim().toLowerCase();
   if (this.username) this.username = this.username.trim();
