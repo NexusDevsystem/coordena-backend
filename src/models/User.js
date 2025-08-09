@@ -7,34 +7,37 @@ const UserSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
 
-    // Matrícula obrigatória e única
+    // Matrícula obrigatória
+    // (não use unique aqui; o índice único é criado abaixo com filtro parcial)
     matricula: {
       type: String,
       required: true,
       trim: true,
-      unique: true,
-      index: true,
-    },
-
-    // Username único — por padrão usa a própria matrícula
-    username: {
-      type: String,
-      trim: true,
-      unique: true,
-      index: true,
-      required: true,
-      default: function defaultUsername() {
-        return this.matricula;
+      set: (v) => {
+        const s = (v ?? "").toString().trim();
+        return s || undefined; // evita "", null => não indexa no parcial
       },
     },
 
-    // Email opcional (sparse + unique). Validado apenas se vier.
+    // Username único — padrão: a própria matrícula
+    username: {
+      type: String,
+      required: true,
+      trim: true,
+      default: function () {
+        return this.matricula;
+      },
+      set: (v) => {
+        const s = (v ?? "").toString().trim();
+        return s || undefined;
+      },
+    },
+
+    // Email opcional (único se existir)
     email: {
       type: String,
       trim: true,
       lowercase: true,
-      unique: true,
-      sparse: true,
       validate: {
         validator(v) {
           if (!v) return true;
@@ -42,11 +45,14 @@ const UserSchema = new mongoose.Schema(
         },
         message: "Email inválido.",
       },
+      set: (v) => {
+        const s = (v ?? "").toString().trim().toLowerCase();
+        return s || undefined; // não indexa vazio
+      },
     },
 
     password: { type: String, required: true },
 
-    // Papéis do sistema
     role: {
       type: String,
       enum: ["admin", "professor"],
@@ -54,7 +60,6 @@ const UserSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Estado de aprovação/login
     status: {
       type: String,
       enum: ["pending", "active", "blocked"],
@@ -69,22 +74,50 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// Índices (reforço)
-UserSchema.index({ email: 1 }, { unique: true, sparse: true });
-UserSchema.index({ matricula: 1 }, { unique: true });
-UserSchema.index({ username: 1 }, { unique: true });
-UserSchema.index({ role: 1 });
-UserSchema.index({ status: 1 });
+/**
+ * ÍNDICES
+ * - matricula: único apenas quando existe e é string (evita duplicidade de null/“”)
+ * - username: único (é obrigatório)
+ * - email: único apenas quando existe e é string
+ */
+UserSchema.index(
+  { matricula: 1 },
+  {
+    name: "matricula_unique_partial",
+    unique: true,
+    partialFilterExpression: { matricula: { $exists: true, $type: "string" } },
+    background: true,
+  }
+);
 
-// Normalizações simples antes de salvar
-UserSchema.pre("save", function normalize(next) {
+UserSchema.index(
+  { username: 1 },
+  {
+    name: "username_unique",
+    unique: true,
+    background: true,
+  }
+);
+
+UserSchema.index(
+  { email: 1 },
+  {
+    name: "email_unique_partial",
+    unique: true,
+    partialFilterExpression: { email: { $exists: true, $type: "string" } },
+    background: true,
+  }
+);
+
+// Normalizações finais
+UserSchema.pre("save", function (next) {
   if (this.email) this.email = this.email.trim().toLowerCase();
   if (this.username) this.username = this.username.trim();
   if (this.matricula) this.matricula = this.matricula.trim();
   next();
 });
 
-// Esconde password no JSON retornado pelo Express
+// Esconde password no JSON
 UserSchema.set("toJSON", {
   transform: (_doc, ret) => {
     ret.id = ret._id;
@@ -94,5 +127,4 @@ UserSchema.set("toJSON", {
   },
 });
 
-const User = mongoose.model("User", UserSchema);
-export default User;
+export default mongoose.model("User", UserSchema);
