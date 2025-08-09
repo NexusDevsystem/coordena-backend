@@ -28,7 +28,7 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 async function seedAdmin() {
   const DEFAULT_ADMIN = {
     name: 'Administrador Coordena',
-    username: 'admin@admin.estacio.br',
+    username: 'admin',
     rawPassword: 'admin',
     role: 'admin'
   };
