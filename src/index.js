@@ -25,6 +25,7 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 // ----------------------------------------
 // Função seedAdmin(): garante admin com email e username corretos
 // ----------------------------------------
+
 async function seedAdmin() {
   const NAME      = 'Administrador Coordena';
   const EMAIL     = 'admin@admin.estacio.br';      // login usa este e-mail
