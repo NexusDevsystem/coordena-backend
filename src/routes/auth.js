@@ -1,71 +1,93 @@
-// BACKEND/src/routes/auth.js
-import express from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+// assets/js/auth.js
 
-const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
+// Base da API — igual à que funcionava antes
+// (já aponta direto para /api/auth e o login usa `${API}/login`)
+const Auth = (() => {
+  const API = window.location.hostname.includes('localhost')
+    ? 'http://localhost:10000/api/auth'
+    : 'https://coordena-backend.onrender.com/api/auth';
 
-// POST /api/auth/login
-// Somente por e-mail institucional (admin usa admin@admin.estacio.br).
-router.post('/login', async (req, res) => {
-  try {
-    let { email, password } = req.body || {};
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Informe e-mail e senha.' });
-    }
-
-    email = String(email).trim().toLowerCase();
-
-    // Busca o usuário e garante trazer o hash da senha
-    const user = await User.findOne({ email })
-      .select('+password +approved +status +role +name +email +username');
-
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
-
-    // Admin identificado tanto pelo role quanto pelo e-mail padrão
-    const isAdmin = user.role === 'admin' || user.email === 'admin@admin.estacio.br';
-
-    // Exigir aprovação apenas para não-admin
-    const isApproved =
-      typeof user.approved === 'boolean'
-        ? user.approved
-        : (user.status ? String(user.status).toLowerCase() === 'approved' : true);
-
-    if (!isAdmin && !isApproved) {
-      return res.status(403).json({ error: 'Conta pendente de aprovação.' });
-    }
-
-    // Valida senha
-    const ok = await bcrypt.compare(String(password), user.password || '');
-    if (!ok) {
-      return res.status(401).json({ error: 'Credenciais inválidas.' });
-    }
-
-    // Gera token
-    const payload = { sub: user._id.toString(), role: user.role, name: user.name };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
-
-    return res.json({
-      user: {
-        id: user._id,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-        username: user.username
-      },
-      token,
-      tokenType: 'Bearer',
-      expiresIn: 7 * 24 * 60 * 60 // 7 dias em segundos
-    });
-  } catch (err) {
-    console.error('Erro no /login:', err);
-    return res.status(500).json({ error: 'Erro no login.' });
+  // ---- Persistência de sessão (localStorage) ----
+  function saveTokenForRole(role, token) {
+    localStorage.setItem(`${role}_token`, token);
+    localStorage.setItem('current_role', role);
   }
-});
+  function getToken(role = localStorage.getItem('current_role') || 'user') {
+    return localStorage.getItem(`${role}_token`);
+  }
+  function clearTokens() {
+    ['admin','user','aluno','professor'].forEach(r =>
+      localStorage.removeItem(`${r}_token`)
+    );
+    localStorage.removeItem('current_role');
+  }
 
-export default router;
+  // ---- Login (email institucional) ----
+  async function login(email, password) {
+    const res = await fetch(`${API}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    // Se der 404 aqui, é porque mudaram a rota no backend.
+    if (res.status === 404) {
+      throw new Error('Endpoint de login não encontrado (404). Verifique a URL da API.');
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Falha no login');
+    }
+
+    const role = (data.user && data.user.role) || 'user';
+    const token = data.token;
+    if (!token) throw new Error('Token não retornado pelo servidor.');
+
+    saveTokenForRole(role, token);
+
+    // Redireciona conforme a role
+    if (role === 'admin') {
+      window.location.href = '/pages/admin.html';
+    } else {
+      window.location.href = '/index.html';
+    }
+  }
+
+  // ---- Logout ----
+  function logout() {
+    clearTokens();
+    window.location.href = '/login.html';
+  }
+
+  // ---- Helper para requests autenticadas (usa token salvo) ----
+  async function authFetch(path, options = {}, role = (localStorage.getItem('current_role') || 'user')) {
+    const token = getToken(role);
+    if (!token) {
+      // sem token: manda pro login
+      window.location.href = '/login.html';
+      throw new Error('Sessão expirada.');
+    }
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    };
+    const base = API.replace(/\/auth$/,''); // vira .../api
+    const res = await fetch(`${base}${path}`, { ...options, headers });
+
+    if (res.status === 401 || res.status === 403) {
+      // token inválido/expirado
+      clearTokens();
+      alert('Sem permissão ou token inválido. Faça login novamente.');
+      window.location.href = '/login.html';
+      throw new Error('unauthorized');
+    }
+    return res;
+  }
+
+  return { API, login, logout, getToken, authFetch };
+})();
+
+// Disponibiliza globalmente
+window.Auth = Auth;
