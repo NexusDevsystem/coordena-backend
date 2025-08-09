@@ -9,42 +9,45 @@ const JWT_SECRET = process.env.JWT_SECRET || "devsecret";
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    let { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ error: "Informe e-mail e senha." });
+    const { email, password, username } = req.body;
+
+    let user;
+    // Se username for 'admin', busca pelo username
+    if (username === "admin") {
+      user = await User.findOne({ username: "admin" });
+    } else {
+      user = await User.findOne({ email });
     }
 
-    email = String(email).trim().toLowerCase();
+    if (!user) {
+      return res.status(401).json({ error: "Usuário não encontrado" });
+    }
 
-    // procura por e-mail e sempre traz a senha
-    const user = await User.findOne({ email }).select(
-      "+password +approved +status +role +name +email +username"
-    );
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: "Senha inválida" });
+    }
 
-    if (!user)
-      return res.status(404).json({ error: "Usuário não encontrado." });
-
-    const isAdmin =
-      user.role === "admin" || user.email === "admin@admin.estacio.br";
-    const roleForToken = isAdmin ? "admin" : user.role;
-
+    // Gera o token com os campos corretos
     const token = jwt.sign(
-      { sub: user._id.toString(), role: roleForToken, name: user.name },
-      JWT_SECRET,
-      { expiresIn: "7d" }
+      {
+        id: user._id,
+        role: user.role,
+        username: user.username, // Inclua username
+        // email: user.email, // Só inclua se existir
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "12h" }
     );
 
-    return res.json({
+    res.json({
+      token,
       user: {
         id: user._id,
         name: user.name,
-        role: roleForToken,
-        email: user.email,
         username: user.username,
+        role: user.role,
       },
-      token,
-      tokenType: "Bearer",
-      expiresIn: 7 * 24 * 60 * 60,
     });
   } catch (err) {
     console.error("Erro no /login:", err);
