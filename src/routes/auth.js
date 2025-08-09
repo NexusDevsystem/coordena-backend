@@ -8,31 +8,29 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
 // POST /api/auth/login
-// Aceita { email, password } OU { username, password }.
-// Normaliza o identificador (trim/lowercase) e procura por email OU username.
+// Somente por e-mail institucional (admin usa admin@admin.estacio.br).
 router.post('/login', async (req, res) => {
   try {
-    const { email, username, password } = req.body || {};
+    let { email, password } = req.body || {};
 
-    if (!password || (!email && !username)) {
-      return res.status(400).json({ error: 'Informe identificador e senha.' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Informe e-mail e senha.' });
     }
 
-    // Normaliza o identificador para comparação consistente
-    const key = String(email || username).trim().toLowerCase();
+    email = String(email).trim().toLowerCase();
 
-    // Busca por email OU username e garante que o password venha do banco
-    const user = await User.findOne({
-      $or: [{ email: key }, { username: key }]
-    }).select('+password +approved +status +role +name +email +username');
+    // Busca o usuário e garante trazer o hash da senha
+    const user = await User.findOne({ email })
+      .select('+password +approved +status +role +name +email +username');
 
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // Se não for admin, exige aprovação
-    // (ajuste se você usa `status: 'approved'` ao invés de `approved: true`)
-    const isAdmin = user.role === 'admin';
+    // Admin identificado tanto pelo role quanto pelo e-mail padrão
+    const isAdmin = user.role === 'admin' || user.email === 'admin@admin.estacio.br';
+
+    // Exigir aprovação apenas para não-admin
     const isApproved =
       typeof user.approved === 'boolean'
         ? user.approved
@@ -42,16 +40,15 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Conta pendente de aprovação.' });
     }
 
+    // Valida senha
     const ok = await bcrypt.compare(String(password), user.password || '');
     if (!ok) {
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
 
-    const token = jwt.sign(
-      { sub: user._id, role: user.role, name: user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    // Gera token
+    const payload = { sub: user._id.toString(), role: user.role, name: user.name };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 
     return res.json({
       user: {
@@ -61,7 +58,9 @@ router.post('/login', async (req, res) => {
         email: user.email,
         username: user.username
       },
-      token
+      token,
+      tokenType: 'Bearer',
+      expiresIn: 7 * 24 * 60 * 60 // 7 dias em segundos
     });
   } catch (err) {
     console.error('Erro no /login:', err);
