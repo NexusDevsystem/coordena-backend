@@ -55,4 +55,9 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// POST /api/auth/register
+router.post("/register", async (req, res) => {
+  // lógica para registrar novo usuário
+});
+
 export default router;
