@@ -41,12 +41,17 @@ router.patch(
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
-      user.status = 'approved';
+      user.status = 'approved'; // agora é válido no schema
       await user.save();
 
-      await sendUserNotification(user, 'approved');
+      // não deixe o envio de e-mail derrubar a rota
+      try {
+        await sendUserNotification(user, 'approved');
+      } catch (mailErr) {
+        console.warn('Aviso: falha ao enviar e-mail de aprovação:', mailErr?.message || mailErr);
+      }
 
-      return res.json({ message: 'Usuário aprovado e e-mail enviado.' });
+      return res.json({ message: 'Usuário aprovado.' });
     } catch (err) {
       console.error(`Erro ao aprovar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao aprovar usuário.' });
@@ -65,35 +70,19 @@ router.patch(
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
-      user.status = 'rejected';
+      user.status = 'rejected'; // agora é válido no schema
       await user.save();
 
-      await sendUserNotification(user, 'rejected', reason);
+      try {
+        await sendUserNotification(user, 'rejected', reason);
+      } catch (mailErr) {
+        console.warn('Aviso: falha ao enviar e-mail de rejeição:', mailErr?.message || mailErr);
+      }
 
-      return res.json({ message: 'Usuário rejeitado e e-mail enviado.' });
+      return res.json({ message: 'Usuário rejeitado.' });
     } catch (err) {
       console.error(`Erro ao rejeitar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar usuário.' });
-    }
-  }
-);
-
-/* ============================================
-   ROTAS PARA RESERVAS PENDENTES
-   ============================================ */
-
-// GET /api/admin/pending-reservations
-router.get(
-  '/pending-reservations',
-  authenticateToken,
-  authorizeAdmin,
-  async (_req, res) => {
-    try {
-      const pendentes = await Reservation.find({ status: 'pending' }).sort({ createdAt: -1 });
-      return res.json(pendentes);
-    } catch (err) {
-      console.error('Erro ao buscar reservas pendentes:', err);
-      return res.status(500).json({ error: 'Erro ao buscar reservas pendentes.' });
     }
   }
 );
@@ -111,10 +100,14 @@ router.patch(
       reservation.status = 'approved';
       await reservation.save();
 
-      const user = await User.findById(reservation.user);
-      await sendReservationNotification(reservation, user, 'approved');
+      try {
+        const user = await User.findById(reservation.user);
+        await sendReservationNotification(reservation, user, 'approved');
+      } catch (mailErr) {
+        console.warn('Aviso: e-mail de reserva aprovada falhou:', mailErr?.message || mailErr);
+      }
 
-      return res.json({ message: 'Reserva aprovada e e-mail enviado.' });
+      return res.json({ message: 'Reserva aprovada.' });
     } catch (err) {
       console.error(`Erro ao aprovar reserva ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao aprovar reserva.' });
@@ -136,15 +129,20 @@ router.patch(
       reservation.status = 'rejected';
       await reservation.save();
 
-      const user = await User.findById(reservation.user);
-      await sendReservationNotification(reservation, user, 'rejected', reason);
+      try {
+        const user = await User.findById(reservation.user);
+        await sendReservationNotification(reservation, user, 'rejected', reason);
+      } catch (mailErr) {
+        console.warn('Aviso: e-mail de reserva rejeitada falhou:', mailErr?.message || mailErr);
+      }
 
-      return res.json({ message: 'Reserva rejeitada e e-mail enviado.' });
+      return res.json({ message: 'Reserva rejeitada.' });
     } catch (err) {
       console.error(`Erro ao rejeitar reserva ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar reserva.' });
     }
   }
 );
+
 
 export default router;
