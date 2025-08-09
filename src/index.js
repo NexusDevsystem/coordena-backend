@@ -1,4 +1,4 @@
-// BACKEND/src/index.js (versão ajustada)
+// BACKEND/src/index.js (versão final ajustada)
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -28,49 +28,36 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || '').trim();
 async function seedAdmin() {
   const DEFAULT_ADMIN = {
     name: 'Administrador Coordena',
-    email: 'admin@admin.estacio.br',
-    rawPassword: 'admin', // Senha “hard‐coded”
+    username: 'admin',
+    rawPassword: 'admin',
     role: 'admin'
   };
 
   try {
-    // 1) Verifica se já existe um usuário com esse e‐mail
-    const existing = await User.findOne({ email: DEFAULT_ADMIN.email });
+    const existing = await User.findOne({ username: DEFAULT_ADMIN.username, role: 'admin' });
     if (existing) {
       console.log('ℹ️  Usuário admin já existe, não será recriado.');
       return;
     }
 
-    // 2) Se não existe, faz hash na senha e cria o registro
     const hashed = await bcrypt.hash(DEFAULT_ADMIN.rawPassword, 10);
 
     await User.create({
       name: DEFAULT_ADMIN.name,
-      email: DEFAULT_ADMIN.email,
+      username: DEFAULT_ADMIN.username,
       password: hashed,
       role: DEFAULT_ADMIN.role,
-      approved: true // Admin já vem aprovado por padrão
+      approved: true // admin já nasce aprovado
+      // sem email mesmo — permitido pelo schema
     });
 
     console.log('✅ Usuário admin padrão criado:');
-    console.log(`   → E‐mail: ${DEFAULT_ADMIN.email}`);
-    console.log(`   → Senha:  ${DEFAULT_ADMIN.rawPassword}`);
+    console.log(`   → Usuário: ${DEFAULT_ADMIN.username}`);
+    console.log(`   → Senha:   ${DEFAULT_ADMIN.rawPassword}`);
   } catch (err) {
     console.error('❌ Erro ao tentar criar usuário admin padrão:', err);
   }
 }
-
-// ----------------------------------------
-// Conexão com MongoDB (Coordena+)
-// ----------------------------------------
-mongoose
-  .connect(MONGO_URI, { dbName: 'Coordena+' })
-  .then(async () => {
-    console.log('✅ Conectado ao MongoDB (Coordena+)');
-    // Após conectar, garante que o admin exista
-    await seedAdmin();
-  })
-  .catch(err => console.error('❌ Erro no MongoDB:', err));
 
 // ----------------------------------------
 // CORS dinâmico
@@ -111,7 +98,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 // ----------------------------------------
-// Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar)
+// Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar) e Push
 // ----------------------------------------
 app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushSubscriptionsRouter);
@@ -272,13 +259,9 @@ const fixedSchedules = [
   { lab: 'Lab B405', dayOfWeek: 5, startTime: '19:00', endTime: '22:30', turno: 'Noite' }
 ];
 
-app.get(
-  '/api/fixedSchedules',
-  authenticateToken,
-  async (_req, res) => {
-    return res.json(fixedSchedules);
-  }
-);
+app.get('/api/fixedSchedules', authenticateToken, async (_req, res) => {
+  return res.json(fixedSchedules);
+});
 
 // ----------------------------------------
 // Healthcheck (rota raiz)
@@ -288,8 +271,42 @@ app.get('/', (_req, res) => {
 });
 
 // ----------------------------------------
-// Inicia servidor
+// Bootstrap: conecta no Mongo, sincroniza índices, faz seed e inicia o servidor
 // ----------------------------------------
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor ouvindo na porta ${PORT}`);
+(async () => {
+  try {
+    if (!MONGO_URI) {
+      throw new Error('MONGO_URI não configurado no .env');
+    }
+
+    await mongoose.connect(MONGO_URI, {
+      dbName: 'Coordena+',
+      autoIndex: true
+    });
+    console.log('✅ Conectado ao MongoDB (Coordena+)');
+
+    // Sincroniza índices (ajuda quando alterou unique/sparse no schema)
+    await User.syncIndexes().catch(e => {
+      console.warn('⚠️  Falha ao sincronizar índices de User (seguindo):', e?.message);
+    });
+
+    // Garante admin
+    await seedAdmin();
+
+    // Sobe o servidor só depois da conexão + seed
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor ouvindo na porta ${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Falha no bootstrap do servidor:', err);
+    process.exit(1);
+  }
+})();
+
+// Trate rejeições não tratadas para logar e não “morrer silenciosamente”
+process.on('unhandledRejection', (reason) => {
+  console.error('🚨 UnhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('🚨 UncaughtException:', err);
 });

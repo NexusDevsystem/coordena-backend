@@ -1,121 +1,88 @@
-// backend/src/routes/auth.js
-
-import { Router } from 'express';
+// BACKEND/src/routes/auth.js
+import express from 'express';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
-import bcrypt from 'bcryptjs';
 
-const router = Router();
+const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
-// POST /api/auth/register
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email: rawEmail, password } = req.body;
-    const email = rawEmail.trim().toLowerCase();
-
-    // 1) Valida domínio institucional (alunos ou professor)
-    const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
-    if (!estacioRegex.test(email)) {
-      return res
-        .status(400)
-        .json({ message: 'E-mail inválido. Use @alunos.estacio.br ou @professor.estacio.br.' });
-    }
-
-    // 2) Verifica se já existe um usuário com este e-mail
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: 'E-mail já cadastrado.' });
-    }
-
-    // 3) Determina role (student ou professor)
-    const role = email.endsWith('@professor.estacio.br') ? 'professor' : 'student';
-
-    // 4) Cria novo usuário com status: "pending"
-    //    (mantemos o antigo campo `approved: false` para compatibilidade, mas
-    //     adicionamos `status: 'pending'` para uso no login)
-    const newUser = new User({
-      name,
-      email,
-      password,       // o hash será gerado no pre('save') do model
-      role,
-      approved: false,
-      status: 'pending'
-    });
-    await newUser.save();
-
-    // 5) Retorna apenas mensagem de sucesso (sem gerar token)
-    return res.status(201).json({
-      message: 'Cadastro recebido! Aguarde aprovação do administrador antes de logar.'
-    });
-  } catch (err) {
-    console.error('[Auth Register] Error:', err);
-    return res.status(500).json({ message: 'Erro ao criar usuário.' });
-  }
-});
-
-// POST /api/auth/login
+// Login:
+// - Admin: body { username: 'admin', password: 'admin' }
+// - Outros: body { email, password }
 router.post('/login', async (req, res) => {
   try {
-    // 1) Pega email e password do corpo da requisição
-    const rawEmail = req.body.email || '';
-    const password = req.body.password || '';
-    const email = rawEmail.trim().toLowerCase();
+    const { username, email, password } = req.body || {};
 
-    // 2) Valida domínio institucional (agora incluindo @admin)
-    const estacioRegex = /^[\w.%+-]+@(alunos|professor|admin)\.estacio\.br$/i;
-    if (!estacioRegex.test(email)) {
-      return res
-        .status(400)
-        .json({ message: 'E-mail inválido. Use @alunos.estacio.br, @professor.estacio.br ou @admin.estacio.br.' });
+    // Fluxo ADMIN por username
+    if (username) {
+      // só permitimos username quando é admin
+      if (username !== 'admin') {
+        return res.status(400).json({ error: 'Login por username permitido apenas para admin.' });
+      }
+
+      const admin = await User.findOne({ username: 'admin', role: 'admin' });
+      if (!admin) {
+        return res.status(401).json({ error: 'Admin não encontrado.' });
+      }
+
+      const ok = await bcrypt.compare(password || '', admin.password);
+      if (!ok) {
+        return res.status(401).json({ error: 'Credenciais inválidas.' });
+      }
+
+      // Admin ignora approved
+      const token = jwt.sign(
+        { sub: admin._id, role: admin.role, name: admin.name },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      return res.json({
+        user: {
+          id: admin._id,
+          name: admin.name,
+          role: admin.role,
+          username: admin.username
+        },
+        token
+      });
     }
 
-    // 3) Busca usuário pelo e-mail e inclui os campos 'password' e 'status'
-    const user = await User.findOne({ email }).select('+password +status');
-    if (!user) {
-      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    // Fluxo padrão por EMAIL
+    if (!email) {
+      return res.status(400).json({ error: 'Informe email e senha.' });
     }
 
-    // 4) Se NÃO for admin e não estiver com status "approved", bloqueia
-    if (user.role !== 'admin' && user.status !== 'approved') {
-      return res
-        .status(403)
-        .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ error: 'Usuário não encontrado.' });
+
+    // Para não-admin, precisa estar aprovado
+    if (user.role !== 'admin' && !user.approved) {
+      return res.status(403).json({ error: 'Conta ainda não aprovada.' });
     }
 
-    // 5) Caso ESPECIAL para o administrador usar sempre a senha "admin"
-    //    Se user.role for "admin" e a senha que chegou no body for exatamente "admin",
-    //    pulamos o bcrypt.compare e consideramos como senha válida.
-    let isMatch = false;
-    if (user.role === 'admin' && password === 'admin') {
-      isMatch = true;
-    } else {
-      // 6) Para todos os outros casos, comparamos com bcrypt normalmente
-      isMatch = await bcrypt.compare(password, user.password);
-    }
+    const ok = await bcrypt.compare(password || '', user.password);
+    if (!ok) return res.status(401).json({ error: 'Credenciais inválidas.' });
 
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Credenciais inválidas.' });
-    }
-
-    // 7) Gera JWT
     const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { sub: user._id, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
     );
 
-    // 8) Retorna usuário (sem senha) e token
     return res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
+      user: {
+        id: user._id,
+        name: user.name,
+        role: user.role,
+        email: user.email
+      },
       token
     });
   } catch (err) {
-    console.error('[Auth Login] Error:', err);
-    return res.status(500).json({ message: 'Erro no login.' });
+    console.error('Erro no /login:', err);
+    return res.status(500).json({ error: 'Erro no login.' });
   }
 });
 
