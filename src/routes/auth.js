@@ -7,63 +7,45 @@ import User from '../models/User.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
-// Login:
-// - Admin: body { username: 'admin', password: 'admin' }
-// - Outros: body { email, password }
+// POST /api/auth/login
+// Aceita { email, password } OU { username, password }.
+// Normaliza o identificador (trim/lowercase) e procura por email OU username.
 router.post('/login', async (req, res) => {
   try {
-    const { username, email, password } = req.body || {};
+    const { email, username, password } = req.body || {};
 
-    // Fluxo ADMIN por username
-    if (username) {
-      // só permitimos username quando é admin
-      if (username !== 'admin') {
-        return res.status(400).json({ error: 'Login por username permitido apenas para admin.' });
-      }
-
-      const admin = await User.findOne({ username: 'admin', role: 'admin' });
-      if (!admin) {
-        return res.status(401).json({ error: 'Admin não encontrado.' });
-      }
-
-      const ok = await bcrypt.compare(password || '', admin.password);
-      if (!ok) {
-        return res.status(401).json({ error: 'Credenciais inválidas.' });
-      }
-
-      // Admin ignora approved
-      const token = jwt.sign(
-        { sub: admin._id, role: admin.role, name: admin.name },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      return res.json({
-        user: {
-          id: admin._id,
-          name: admin.name,
-          role: admin.role,
-          username: admin.username
-        },
-        token
-      });
+    if (!password || (!email && !username)) {
+      return res.status(400).json({ error: 'Informe identificador e senha.' });
     }
 
-    // Fluxo padrão por EMAIL
-    if (!email) {
-      return res.status(400).json({ error: 'Informe email e senha.' });
+    // Normaliza o identificador para comparação consistente
+    const key = String(email || username).trim().toLowerCase();
+
+    // Busca por email OU username e garante que o password venha do banco
+    const user = await User.findOne({
+      $or: [{ email: key }, { username: key }]
+    }).select('+password +approved +status +role +name +email +username');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Usuário não encontrado.' });
+    // Se não for admin, exige aprovação
+    // (ajuste se você usa `status: 'approved'` ao invés de `approved: true`)
+    const isAdmin = user.role === 'admin';
+    const isApproved =
+      typeof user.approved === 'boolean'
+        ? user.approved
+        : (user.status ? String(user.status).toLowerCase() === 'approved' : true);
 
-    // Para não-admin, precisa estar aprovado
-    if (user.role !== 'admin' && !user.approved) {
-      return res.status(403).json({ error: 'Conta ainda não aprovada.' });
+    if (!isAdmin && !isApproved) {
+      return res.status(403).json({ error: 'Conta pendente de aprovação.' });
     }
 
-    const ok = await bcrypt.compare(password || '', user.password);
-    if (!ok) return res.status(401).json({ error: 'Credenciais inválidas.' });
+    const ok = await bcrypt.compare(String(password), user.password || '');
+    if (!ok) {
+      return res.status(401).json({ error: 'Credenciais inválidas.' });
+    }
 
     const token = jwt.sign(
       { sub: user._id, role: user.role, name: user.name },
@@ -76,7 +58,8 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         role: user.role,
-        email: user.email
+        email: user.email,
+        username: user.username
       },
       token
     });
