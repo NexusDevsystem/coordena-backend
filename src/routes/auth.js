@@ -91,3 +91,4 @@ const Auth = (() => {
 
 // Disponibiliza globalmente
 window.Auth = Auth;
+export default router;
