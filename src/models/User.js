@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // BACKEND/src/models/User.js
-=======
-// backend/src/models/User.js
->>>>>>> 46c31a77d9005eaa104e8fa1240824eda93504db
 import mongoose from 'mongoose';
 
 const UserSchema = new mongoose.Schema(
@@ -18,7 +14,6 @@ const UserSchema = new mongoose.Schema(
       index: true
     },
 
-<<<<<<< HEAD
     // Email obrigatório para não-admin
     email: {
       type: String,
@@ -59,61 +54,3 @@ UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 
 const User = mongoose.model('User', UserSchema);
 export default User;
-=======
-    // Novo campo de matrícula  
-    registration: {
-      type: String,
-      required: true,
-      unique: true
-    },
-
-    // E-mail institucional
-    institutionalEmail: {
-      type: String,
-      required: true,
-      unique: true
-    },
-
-    // E-mail pessoal
-    personalEmail: {
-      type: String,
-      required: true,
-      unique: true
-    },
-
-    password: {
-      type: String,
-      required: true,
-      select: false
-    },
-
-    role: {
-      type: String,
-      enum: ['student','professor','admin'],
-      default: 'student'
-    },
-
-    status: {
-      type: String,
-      enum: ['pending','approved','rejected'],
-      default: 'pending'
-    }
-  },
-  {
-    timestamps: true
-  }
-);
-
-// hash da senha
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-
-userSchema.methods.matchPassword = function(entered) {
-  return bcrypt.compare(entered, this.password);
-};
-
-export default mongoose.model('User', userSchema);
->>>>>>> 46c31a77d9005eaa104e8fa1240824eda93504db
