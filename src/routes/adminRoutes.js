@@ -4,6 +4,10 @@ import express from 'express';
 import { authenticateToken, authorizeAdmin } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
 import Reservation from '../models/reservation.js';
+import {
+  sendUserNotification,
+  sendReservationNotification
+} from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -12,7 +16,6 @@ const router = express.Router();
    ============================================ */
 
 // GET /api/admin/pending-users
-// → Retorna todos os usuários com status: 'pending'
 router.get(
   '/pending-users',
   authenticateToken,
@@ -29,22 +32,21 @@ router.get(
 );
 
 // PATCH /api/admin/approve-user/:id
-// → Marca status = 'approved' para o usuário especificado
 router.patch(
   '/approve-user/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
     try {
-      const userId = req.params.id;
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'Usuário não encontrado.' });
-      }
+      const user = await User.findById(req.params.id);
+      if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
       user.status = 'approved';
       await user.save();
-      return res.json({ message: 'Usuário aprovado com sucesso.' });
+
+      await sendUserNotification(user, 'approved');
+
+      return res.json({ message: 'Usuário aprovado e e-mail enviado.' });
     } catch (err) {
       console.error(`Erro ao aprovar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao aprovar usuário.' });
@@ -53,50 +55,25 @@ router.patch(
 );
 
 // PATCH /api/admin/reject-user/:id
-// → Marca status = 'rejected' para o usuário especificado
 router.patch(
   '/reject-user/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
     try {
-      const userId = req.params.id;
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'Usuário não encontrado.' });
-      }
+      const { reason } = req.body;
+      const user = await User.findById(req.params.id);
+      if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
       user.status = 'rejected';
       await user.save();
-      return res.json({ message: 'Usuário rejeitado com sucesso.' });
+
+      await sendUserNotification(user, 'rejected', reason);
+
+      return res.json({ message: 'Usuário rejeitado e e-mail enviado.' });
     } catch (err) {
       console.error(`Erro ao rejeitar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar usuário.' });
-    }
-  }
-);
-
-/* ============================================
-   NOVA ROTA: HISTÓRICO DE USUÁRIOS (approved + rejected)
-   ============================================ */
-
-// GET /api/admin/users-history
-// → Retorna todos os usuários cujo status esteja em ['approved','rejected']
-router.get(
-  '/users-history',
-  authenticateToken,
-  authorizeAdmin,
-  async (_req, res) => {
-    try {
-      // Busca usuários com status aprovado ou rejeitado
-      const historico = await User.find({ status: { $in: ['approved', 'rejected'] } })
-        .select('-password') // não retornar campo password
-        .sort({ updatedAt: -1 }); // ordena pelo mais recentemente atualizado
-
-      return res.json(historico);
-    } catch (err) {
-      console.error('Erro ao buscar histórico de usuários:', err);
-      return res.status(500).json({ error: 'Erro ao buscar histórico de usuários.' });
     }
   }
 );
@@ -106,7 +83,6 @@ router.get(
    ============================================ */
 
 // GET /api/admin/pending-reservations
-// → Retorna todas as reservas com status: 'pending'
 router.get(
   '/pending-reservations',
   authenticateToken,
@@ -123,22 +99,22 @@ router.get(
 );
 
 // PATCH /api/admin/approve-reservation/:id
-// → Altera status = 'approved' para a reserva especificada
 router.patch(
   '/approve-reservation/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
     try {
-      const reservationId = req.params.id;
-      const reservation = await Reservation.findById(reservationId);
-      if (!reservation) {
-        return res.status(404).json({ error: 'Reserva não encontrada.' });
-      }
+      const reservation = await Reservation.findById(req.params.id);
+      if (!reservation) return res.status(404).json({ error: 'Reserva não encontrada.' });
 
       reservation.status = 'approved';
       await reservation.save();
-      return res.json({ message: 'Reserva aprovada com sucesso.' });
+
+      const user = await User.findById(reservation.user);
+      await sendReservationNotification(reservation, user, 'approved');
+
+      return res.json({ message: 'Reserva aprovada e e-mail enviado.' });
     } catch (err) {
       console.error(`Erro ao aprovar reserva ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao aprovar reserva.' });
@@ -146,22 +122,24 @@ router.patch(
   }
 );
 
-// DELETE /api/admin/reject-reservation/:id
-// → Deleta a reserva pendente especificada
-router.delete(
+// PATCH /api/admin/reject-reservation/:id
+router.patch(
   '/reject-reservation/:id',
   authenticateToken,
   authorizeAdmin,
   async (req, res) => {
     try {
-      const reservationId = req.params.id;
-      const reservation = await Reservation.findById(reservationId);
-      if (!reservation) {
-        return res.status(404).json({ error: 'Reserva não encontrada.' });
-      }
+      const { reason } = req.body;
+      const reservation = await Reservation.findById(req.params.id);
+      if (!reservation) return res.status(404).json({ error: 'Reserva não encontrada.' });
 
-      await Reservation.findByIdAndDelete(reservationId);
-      return res.json({ message: 'Reserva rejeitada e excluída com sucesso.' });
+      reservation.status = 'rejected';
+      await reservation.save();
+
+      const user = await User.findById(reservation.user);
+      await sendReservationNotification(reservation, user, 'rejected', reason);
+
+      return res.json({ message: 'Reserva rejeitada e e-mail enviado.' });
     } catch (err) {
       console.error(`Erro ao rejeitar reserva ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar reserva.' });

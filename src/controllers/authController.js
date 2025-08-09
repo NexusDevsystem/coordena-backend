@@ -1,10 +1,10 @@
 // backend/src/controllers/authController.js
 
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import PushSubscription from '../models/ushSubscription.js';
-import { sendPushNotification } from '../config/webpush.js';
 import bcrypt from 'bcryptjs';
+import User from '../models/User.js';
+import PushSubscription from '../models/PushSubscription.js';
+import { sendPushNotification } from '../config/webpush.js';
 
 // Regex institucional Estácio (alunos e professores)
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
@@ -19,120 +19,104 @@ const generateToken = (id, role) => {
 
 /**
  * POST /api/auth/register
- * → Role é inferido pelo domínio (@professor ou @alunos).
- * → cria um novo usuário com status="pending".
- * → Se já existir, atualiza nome, role e senha, mantendo status atual.
  */
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
+    const {
+      name,
+      registration,
+      institutionalEmail,
+      personalEmail,
+      password
+    } = req.body;
+
+    // 1) validação de campos obrigatórios
+    if (!name || !registration || !institutionalEmail || !personalEmail || !password) {
       return res.status(400).json({ message: 'Preencha todos os campos' });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    // Validação de domínio institucional
-    if (!estacioRegex.test(normalizedEmail)) {
+    // 2) normaliza valores
+    const reg        = registration.trim();
+    const instEmail  = institutionalEmail.trim().toLowerCase();
+    const persEmail  = personalEmail.trim().toLowerCase();
+
+    // 3) valida domínio institucional
+    if (!estacioRegex.test(instEmail)) {
       return res.status(400).json({
         message:
           'Use um e-mail institucional válido (@alunos.estacio.br ou @professor.estacio.br)'
       });
     }
 
-    // Define role automaticamente pelo domínio
-    const role = normalizedEmail.endsWith('@professor.estacio.br')
-      ? 'professor'
-      : 'student';
+    // 4) define role automaticamente
+    const role = instEmail.endsWith('@professor.estacio.br') ? 'professor' : 'student';
 
-    // Verifica se usuário já existe
-    let user = await User.findOne({ email: normalizedEmail }).select('+status');
-
+    // 5) se já existir, atualiza
+    let user = await User.findOne({ institutionalEmail: instEmail }).select('+status');
     if (user) {
-      // Se já existe, apenas atualiza nome, role e senha (re-hash será feito pelo pre-save hook)
-      user.name = name;
-      user.role = role;
-      user.password = password;
-      // NÃO alteramos o campo 'status' aqui: mantemos o status atual (pending/approved/rejected).
+      user.name         = name;
+      user.registration = reg;
+      user.password     = password;  // pre-save faz hash
+      user.role         = role;
       await user.save();
 
       const token = generateToken(user._id, user.role);
       return res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status, // devolvemos o status atual (pode ser 'pending', 'approved' ou 'rejected')
+        _id:                user._id,
+        name:               user.name,
+        registration:       user.registration,
+        institutionalEmail: user.institutionalEmail,
+        personalEmail:      user.personalEmail,
+        role:               user.role,
+        status:             user.status,
         token
       });
     }
 
-    // Cria novo usuário com status = "pending"
+    // 6) cria novo usuário com status 'pending'
     const newUser = new User({
       name,
-      email: normalizedEmail,
-      password, // pre-save hook fará o hash
+      registration:       reg,
+      institutionalEmail: instEmail,
+      personalEmail:      persEmail,
+      password,
       role,
-      status: 'pending'
+      status:             'pending'
     });
     await newUser.save();
 
-    console.log(`→ Novo usuário pendente criado: ${newUser._id} (${newUser.email})`);
+    // 7) notifica admins via push
+    const admins   = await User.find({ role: 'admin', status: 'approved' }).select('_id');
+    const adminIds = admins.map(a => a._id.toString());
+    const subs     = await PushSubscription.find({ userId: { $in: adminIds } });
 
-    // 1) Buscar todos os admins que já estão status="approved"
-    const admins = await User.find({ role: 'admin', status: 'approved' }).select('_id');
-    const adminIds = admins.map((a) => a._id.toString());
-    console.log(`→ IDs de admins aprovados: [${adminIds.join(', ')}]`);
-
-    // 2) Buscar todas as subscriptions desses admins
-    const subs = await PushSubscription.find({ userId: { $in: adminIds } });
-    console.log(`→ Encontrei ${subs.length} subscription(s) de admin(es).`);
-
-    // 3) Montar payload da notificação
     const payload = JSON.stringify({
       title: 'Nova solicitação de cadastro',
-      body: `${newUser.name} solicitou acesso.`,
-      data: { url: '/pages/admin.html' }
+      body:  `${newUser.name} solicitou acesso.`,
+      data:  { url: '/pages/admin.html' }
     });
 
-    // 4) Enviar push para cada subscription
-    subs.forEach((sub) => {
-      console.log(`→ Tentando enviar push para endpoint: ${sub.endpoint}`);
+    subs.forEach(sub =>
       sendPushNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: {
-            p256dh: sub.keys.p256dh,
-            auth: sub.keys.auth
-          }
-        },
+        { endpoint: sub.endpoint, keys: sub.keys },
         payload
-      )
-        .then(() => {
-          console.log('   ✔ Enviado com sucesso!');
-        })
-        .catch((err) => {
-          console.error('   ❌ Falha ao enviar push para:', sub.endpoint, err);
-          // Se 410/404, remove a subscription inválida
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            PushSubscription.deleteOne({ _id: sub._id })
-              .then(() =>
-                console.log(`   • Subscription removida (${sub.endpoint}) pois está inválida.`)
-              )
-              .catch((e) =>
-                console.error('   • Erro ao remover subscription inválida:', e)
-              );
-          }
-        });
-    });
+      ).catch(err => {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          PushSubscription.deleteOne({ _id: sub._id }).catch(() => {});
+        }
+      })
+    );
 
-    // 5) Retorna a resposta de registro
+    // 8) retorna dados e token
     const token = generateToken(newUser._id, newUser.role);
     return res.status(201).json({
-      _id: newUser._id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      status: newUser.status, // 'pending'
+      _id:                newUser._id,
+      name:               newUser.name,
+      registration:       newUser.registration,
+      institutionalEmail: newUser.institutionalEmail,
+      personalEmail:      newUser.personalEmail,
+      role:               newUser.role,
+      status:             newUser.status,
       token
     });
   } catch (err) {
@@ -146,60 +130,83 @@ export const registerUser = async (req, res) => {
 
 /**
  * POST /api/auth/login
- * → Busca o usuário (juntando +password e +status no select).
- * → Se senha inválida ou usuário não existe → 401.
- * → Se status != 'approved' → 403 (ainda sem aprovação).
- * → Senão, gera token e devolve dados básicos + status.
+ *
+ * Suporta:
+ *  - login “super-admin” com usuário “admin” + senha “admin123”
+ *    → não exige e-mail, retorna token admin.
+ *  - login comum, via campo `email` ou `institutionalEmail`.
  */
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    // leio tanto `institutionalEmail` (controller) quanto `email` (frontend)
+    const rawEmail = (req.body.institutionalEmail || req.body.email || '').trim();
+    const password = req.body.password;
+
+    if (!rawEmail || !password) {
       return res.status(400).json({ message: 'Preencha todos os campos' });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    // Validação de domínio institucional
-    if (!estacioRegex.test(normalizedEmail)) {
+    const instEmail = rawEmail.toLowerCase();
+
+    // ─── 1) Super-admin fixo: "admin" / "admin123" ─────────────────────────────
+    if (instEmail === 'admin') {
+      if (password !== 'admin123') {
+        return res.status(401).json({ message: 'Credenciais inválidas' });
+      }
+      // Em um cenário real você talvez queira buscar um _id real - aqui usamos "admin"
+      const token = generateToken('admin', 'admin');
+      return res.json({
+        _id:                'admin',
+        name:               'admin',
+        registration:       null,
+        institutionalEmail: null,
+        personalEmail:      null,
+        role:               'admin',
+        status:             'approved',
+        token
+      });
+    }
+
+    // ─── 2) Caso normal: valida e-mail institucional ─────────────────────────────
+    if (!estacioRegex.test(instEmail)) {
       return res.status(400).json({
         message:
           'Use um e-mail institucional válido (@alunos.estacio.br ou @professor.estacio.br)'
       });
     }
 
-    // Busca usuário incluindo senha e status
-    const user = await User.findOne({ email: normalizedEmail }).select(
-      '+password +status'
-    );
+    // 3) Busca usuário no banco
+    const user = await User.findOne({ institutionalEmail: instEmail })
+      .select('+password +status +personalEmail');
     if (!user) {
-      return res.status(401).json({ message: 'E-mail ou senha incorretos' });
+      return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
-    // Verifica se a senha bate
+    // 4) Valida senha
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'E-mail ou senha incorretos' });
+      return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
-    // Verifica se o usuário já foi aprovado pelo admin
+    // 5) Só usuários aprovados
     if (user.status !== 'approved') {
       return res
         .status(403)
         .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
     }
 
-    // Se passou na validação, gera o JWT
+    // 6) Gera e retorna token
     const token = generateToken(user._id, user.role);
-
-    // Remover senha antes de enviar de volta (segurança)
     user.password = undefined;
 
     return res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status, // 'approved'
+      _id:                user._id,
+      name:               user.name,
+      registration:       user.registration,
+      institutionalEmail: user.institutionalEmail,
+      personalEmail:      user.personalEmail,
+      role:               user.role,
+      status:             user.status,
       token
     });
   } catch (err) {
