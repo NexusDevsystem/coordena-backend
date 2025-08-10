@@ -131,4 +131,12 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Rota para obter informações do usuário autenticado
+router.get('/me', authenticateToken, async (req, res) => {
+  // Busque o usuário pelo ID do token
+  const user = await User.findById(req.user.id);
+  if (!user) return res.sendStatus(404);
+  res.json({ user });
+});
+
 export default router;
