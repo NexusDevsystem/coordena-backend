@@ -1,35 +1,30 @@
-// backend/src/middleware/auth.js
-const jwt = require('jsonwebtoken');
+// backend/src/middleware/authorize.js (ESM)
+import jwt from "jsonwebtoken";
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
+export default function authorize(allowedRoles = []) {
+  if (typeof allowedRoles === "string") allowedRoles = [allowedRoles];
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-}
-
-module.exports = authenticateToken;
-
-/**
- * Middleware de autorização por função
- * @param  {...string} allowedRoles - lista de roles permitidos (ex: 'professor', 'admin')
- */
-export default function authorize(...allowedRoles) {
   return (req, res, next) => {
-    // O middleware 'protect' deve ter preenchido req.user com { id, role }
-    if (!req.user) {
-      return res.status(401).json({ message: 'Não autenticado' });
+    const authHeader = req.headers["authorization"] || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return res.status(401).json({ error: "Token não fornecido" });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ message: 'Acesso negado: permissão insuficiente' });
-    }
+    try {
+      const secret = process.env.JWT_SECRET;
+      const decoded = jwt.verify(token, secret);
+      req.user = decoded; // id, role, etc.
 
-    next();
+      if (allowedRoles.length > 0 && !allowedRoles.includes(decoded.role)) {
+        return res.status(403).json({ error: "Acesso negado" });
+      }
+
+      return next();
+    } catch (err) {
+      console.error("[authorize] JWT error:", err.message);
+      return res.status(401).json({ error: "Token inválido ou expirado" });
+    }
   };
 }
