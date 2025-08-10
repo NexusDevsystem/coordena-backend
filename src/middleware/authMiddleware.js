@@ -8,39 +8,16 @@ import User from '../models/User.js';
  * Se válido, busca o usuário no banco (sem a senha) e anexa em req.user.
  * Caso contrário, retorna erro 401.
  */
-export const authenticateToken = async (req, res, next) => {
-  let token;
+export const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
 
-  // Extrair token do header Authorization: "Bearer <token>"
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer ')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return res.status(401).json({ error: 'Token não fornecido.' });
-  }
-
-  try {
-    // Verifica e decodifica o token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // decoded deve conter { id: userId, role: '...' }
-
-    // Busca o usuário no banco, removendo o campo "password"
-    const user = await User.findById(decoded.id).select('-password');
-    if (!user) {
-      return res.status(401).json({ error: 'Usuário não encontrado.' });
-    }
-
-    // Anexa o usuário autenticado em req.user
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
     req.user = user;
-    return next();
-  } catch (err) {
-    console.error('Erro ao verificar token JWT:', err);
-    return res.status(401).json({ error: 'Token inválido.' });
-  }
+    next();
+  });
 };
 
 /**
