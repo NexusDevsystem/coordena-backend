@@ -16,6 +16,13 @@ import authorize from "./middleware/authorize.js"; // middleware de roles
 import User from "./models/User.js"; // Modelo de usuário (Mongoose)
 
 dotenv.config();
+
+app.options("*", cors());
+const app = express();
+const PORT = process.env.PORT || 10000;
+const MONGO_URI = process.env.MONGO_URI;
+const FRONTEND_URL = (process.env.FRONTEND_URL || "").trim();
+
 const allowedOrigins = (process.env.FRONTEND_URL || "")
   .split(",")
   .map((o) => o.trim())
@@ -35,12 +42,6 @@ app.use(
     optionsSuccessStatus: 200,
   })
 );
-
-app.options("*", cors());
-const app = express();
-const PORT = process.env.PORT || 10000;
-const MONGO_URI = process.env.MONGO_URI;
-const FRONTEND_URL = (process.env.FRONTEND_URL || "").trim();
 
 // ----------------------------------------
 // Função seedAdmin(): garante admin com email e username corretos
