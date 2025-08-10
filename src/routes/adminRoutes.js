@@ -12,7 +12,7 @@ import {
 const router = express.Router();
 
 /* ============================================
-   ROTAS PARA USUÁRIOS PENDENTES (status: 'pending')
+   USUÁRIOS PENDENTES (status: 'pending')
    ============================================ */
 
 // GET /api/admin/pending-users
@@ -31,6 +31,22 @@ router.get(
   }
 );
 
+// (alias opcional) GET /api/admin/users/pending
+router.get(
+  '/users/pending',
+  authenticateToken,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      const pendentes = await User.find({ status: 'pending' }).sort({ createdAt: 1 });
+      return res.json(pendentes);
+    } catch (err) {
+      console.error('Erro ao buscar usuários pendentes (alias):', err);
+      return res.status(500).json({ error: 'Erro ao buscar usuários pendentes.' });
+    }
+  }
+);
+
 // PATCH /api/admin/approve-user/:id
 router.patch(
   '/approve-user/:id',
@@ -41,10 +57,9 @@ router.patch(
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
-      user.status = 'approved'; // agora é válido no schema
+      user.status = 'approved';
       await user.save();
 
-      // não deixe o envio de e-mail derrubar a rota
       try {
         await sendUserNotification(user, 'approved');
       } catch (mailErr) {
@@ -70,7 +85,7 @@ router.patch(
       const user = await User.findById(req.params.id);
       if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
-      user.status = 'rejected'; // agora é válido no schema
+      user.status = 'rejected';
       await user.save();
 
       try {
@@ -83,6 +98,46 @@ router.patch(
     } catch (err) {
       console.error(`Erro ao rejeitar usuário ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao rejeitar usuário.' });
+    }
+  }
+);
+
+/* ============================================
+   RESERVAS – pendentes / aprovar / rejeitar
+   ============================================ */
+
+// ✅ GET /api/admin/pending-reservations
+router.get(
+  '/pending-reservations',
+  authenticateToken,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      const pendentes = await Reservation
+        .find({ status: 'pending' })
+        .sort({ date: 1, start: 1, createdAt: 1 });
+      return res.json(pendentes);
+    } catch (err) {
+      console.error('Erro ao buscar reservas pendentes:', err);
+      return res.status(500).json({ error: 'Erro ao buscar reservas pendentes.' });
+    }
+  }
+);
+
+// (alias opcional) GET /api/admin/reservations/pending
+router.get(
+  '/reservations/pending',
+  authenticateToken,
+  authorizeAdmin,
+  async (_req, res) => {
+    try {
+      const pendentes = await Reservation
+        .find({ status: 'pending' })
+        .sort({ date: 1, start: 1, createdAt: 1 });
+      return res.json(pendentes);
+    } catch (err) {
+      console.error('Erro ao buscar reservas pendentes (alias):', err);
+      return res.status(500).json({ error: 'Erro ao buscar reservas pendentes.' });
     }
   }
 );
@@ -107,7 +162,7 @@ router.patch(
         console.warn('Aviso: e-mail de reserva aprovada falhou:', mailErr?.message || mailErr);
       }
 
-      return res.json({ message: 'Reserva aprovada.' });
+      return res.json({ message: 'Reserva aprovado.' });
     } catch (err) {
       console.error(`Erro ao aprovar reserva ${req.params.id}:`, err);
       return res.status(500).json({ error: 'Erro ao aprovar reserva.' });
@@ -143,6 +198,5 @@ router.patch(
     }
   }
 );
-
 
 export default router;
