@@ -136,52 +136,65 @@ export const registerUser = async (req, res) => {
  *    → não exige e-mail, retorna token admin.
  *  - login comum, via campo `email` ou `institutionalEmail`.
  */
+const normalize = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : s);
+const isApproved = (u) => {
+  const st = String(u?.status || '').toLowerCase().trim();
+  return st === 'approved' || st === 'active' || u?.approved === true || u?.isApproved === true;
+};
+
 export const loginUser = async (req, res) => {
   try {
     const { email, username, matricula, password } = req.body || {};
+
     if (!password || (!email && !username && !matricula)) {
       return res.status(400).json({ error: 'Credenciais inválidas.' });
     }
 
-    let user;
-    // Tenta encontrar o usuário por email, depois username, depois matrícula
-    // Adicionado .select('+status +password') para garantir que os campos sejam retornados
-    if (email) {
-      user = await User.findOne({ institutionalEmail: String(email).toLowerCase() }).select('+status +password');
-    }
-    if (!user && username) {
-      user = await User.findOne({ username: String(username) }).select('+status +password');
-    }
-    if (!user && matricula) {
-      user = await User.findOne({ registration: String(matricula) }).select('+status +password');
-    }
+    const emailNorm = email ? normalize(email) : null;
+    const uname =
+      (username && String(username).trim()) ||
+      (emailNorm ? emailNorm.split('@')[0] : null);
+    const mat = matricula ? String(matricula).trim() : null;
 
-    if (!user) {
+    const ors = [];
+    if (emailNorm) ors.push({ institutionalEmail: emailNorm });
+    if (uname) ors.push({ username: uname });
+    if (mat) ors.push({ registration: mat });
+
+    const candidates = await User.find({ $or: ors }).select('+password +status');
+    if (!candidates.length) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password || '');
-    if (!isPasswordCorrect) {
-      return res.status(401).json({ error: 'Credenciais inválidas.' });
+    // Tenta sempre priorizando quem está aprovado
+    const sorted = [...candidates].sort((a, b) => (isApproved(b) - isApproved(a)));
+
+    let matched = null;
+    let foundPasswordButPending = false;
+
+    for (const u of sorted) {
+      const ok = await bcrypt.compare(password, u.password || '');
+      if (!ok) continue;
+      if (!isApproved(u)) { foundPasswordButPending = true; continue; }
+      matched = u;
+      break;
     }
 
-    const status = (user.status || '').toLowerCase();
-    const isApproved = status === 'approved' || status === 'active' || user.approved === true || user.isApproved === true;
-
-    if (!isApproved) {
-      return res.status(403).json({
-        error: 'Sua conta está pendente. Aguarde até 24h para aprovação.'
-      });
+    if (!matched) {
+      if (foundPasswordButPending) {
+        return res.status(403).json({ error: 'Sua conta está pendente. Aguarde até 24h para aprovação.' });
+      }
+      return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
     }
 
-    const token = generateToken(user._id, user.role);
+    const token = generateToken(matched._id, matched.role);
 
     const safeUser = {
-      _id: user._id,
-      name: user.name,
-      email: user.institutionalEmail, // Garante que o email correto seja retornado
-      role: user.role,
-      status: user.status || (isApproved ? 'approved' : 'pending'),
+      _id: matched._id,
+      name: matched.name,
+      email: matched.institutionalEmail,
+      role: matched.role,
+      status: isApproved(matched) ? 'approved' : (matched.status || 'pending'),
     };
 
     return res.json({ user: safeUser, token });
