@@ -143,27 +143,26 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: 'Credenciais inválidas.' });
     }
 
-    // aceita login por email OU username
-    const query = email ? { email: String(email).toLowerCase() } : { username: String(username) };
+    const query = email
+      ? { email: String(email).toLowerCase() }
+      : { username: String(username) };
+
     const user = await User.findOne(query);
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const ok = await bcrypt.compare(password, user.password || '');
-    if (!ok) {
-      return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
-    }
+    if (!ok) return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
 
-    // ✅ Compatível com esquemas antigos e novos
+    // ✅ considera aprovado se QUALQUER uma das formas estiver marcada
     const approved =
       user.status === 'approved' ||
       user.approved === true ||
       user.isApproved === true;
 
     if (!approved) {
-      // Mantém a mensagem que o frontend já exibe no modal
-      return res.status(403).json({ error: 'Sua conta está pendente. Aguarde até 24h para aprovação.' });
+      return res.status(403).json({
+        error: 'Sua conta está pendente. Aguarde até 24h para aprovação.'
+      });
     }
 
     const payload = {
@@ -172,21 +171,19 @@ export const loginUser = async (req, res) => {
       name: user.name,
       email: user.email,
     };
-
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' });
 
-    // devolve usuário “sanitizado”
     const safeUser = {
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      status: user.status || (user.approved || user.isApproved ? 'approved' : 'pending'),
+      status: user.status || ((user.approved || user.isApproved) ? 'approved' : 'pending'),
     };
 
     return res.json({ user: safeUser, token });
   } catch (err) {
-    console.error('[authController.login] erro:', err);
+    console.error('[authController.login]', err);
     return res.status(500).json({ error: 'Erro ao efetuar login.' });
   }
 };
