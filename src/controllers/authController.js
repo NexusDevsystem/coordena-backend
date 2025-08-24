@@ -145,14 +145,15 @@ export const loginUser = async (req, res) => {
 
     let user;
     // Tenta encontrar o usuário por email, depois username, depois matrícula
+    // Adicionado .select('+status +password') para garantir que os campos sejam retornados
     if (email) {
-      user = await User.findOne({ institutionalEmail: String(email).toLowerCase() });
+      user = await User.findOne({ institutionalEmail: String(email).toLowerCase() }).select('+status +password');
     }
     if (!user && username) {
-      user = await User.findOne({ username: String(username) });
+      user = await User.findOne({ username: String(username) }).select('+status +password');
     }
     if (!user && matricula) {
-      user = await User.findOne({ registration: String(matricula) });
+      user = await User.findOne({ registration: String(matricula) }).select('+status +password');
     }
 
     if (!user) {
