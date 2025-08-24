@@ -138,79 +138,55 @@ export const registerUser = async (req, res) => {
  */
 export const loginUser = async (req, res) => {
   try {
-    // leio tanto `institutionalEmail` (controller) quanto `email` (frontend)
-    const rawEmail = (req.body.institutionalEmail || req.body.email || '').trim();
-    const password = req.body.password;
-
-    if (!rawEmail || !password) {
-      return res.status(400).json({ message: 'Preencha todos os campos' });
+    const { email, username, password } = req.body || {};
+    if ((!email && !username) || !password) {
+      return res.status(400).json({ error: 'Credenciais inválidas.' });
     }
 
-    const instEmail = rawEmail.toLowerCase();
-
-    // ─── 1) Super-admin fixo: "admin" / "admin123" ─────────────────────────────
-    if (instEmail === 'admin') {
-      if (password !== 'admin123') {
-        return res.status(401).json({ message: 'Credenciais inválidas' });
-      }
-      // Em um cenário real você talvez queira buscar um _id real - aqui usamos "admin"
-      const token = generateToken('admin', 'admin');
-      return res.json({
-        _id:                'admin',
-        name:               'admin',
-        registration:       null,
-        institutionalEmail: null,
-        personalEmail:      null,
-        role:               'admin',
-        status:             'approved',
-        token
-      });
-    }
-
-    // ─── 2) Caso normal: valida e-mail institucional ─────────────────────────────
-    if (!estacioRegex.test(instEmail)) {
-      return res.status(400).json({
-        message:
-          'Use um e-mail institucional válido (@alunos.estacio.br ou @professor.estacio.br)'
-      });
-    }
-
-    // 3) Busca usuário no banco
-    const user = await User.findOne({ institutionalEmail: instEmail })
-      .select('+password +status +personalEmail');
+    // aceita login por email OU username
+    const query = email ? { email: String(email).toLowerCase() } : { username: String(username) };
+    const user = await User.findOne(query);
     if (!user) {
-      return res.status(401).json({ message: 'Credenciais inválidas' });
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // 4) Valida senha
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Credenciais inválidas' });
+    const ok = await bcrypt.compare(password, user.password || '');
+    if (!ok) {
+      return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
     }
 
-    // 5) Só usuários aprovados
-    if (user.status !== 'approved') {
-      return res
-        .status(403)
-        .json({ message: 'Sua conta ainda não foi aprovada pelo administrador.' });
+    // ✅ Compatível com esquemas antigos e novos
+    const approved =
+      user.status === 'approved' ||
+      user.approved === true ||
+      user.isApproved === true;
+
+    if (!approved) {
+      // Mantém a mensagem que o frontend já exibe no modal
+      return res.status(403).json({ error: 'Sua conta está pendente. Aguarde até 24h para aprovação.' });
     }
 
-    // 6) Gera e retorna token
-    const token = generateToken(user._id, user.role);
-    user.password = undefined;
+    const payload = {
+      id: user._id.toString(),
+      role: user.role,
+      name: user.name,
+      email: user.email,
+    };
 
-    return res.json({
-      _id:                user._id,
-      name:               user.name,
-      registration:       user.registration,
-      institutionalEmail: user.institutionalEmail,
-      personalEmail:      user.personalEmail,
-      role:               user.role,
-      status:             user.status,
-      token
-    });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' });
+
+    // devolve usuário “sanitizado”
+    const safeUser = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status || (user.approved || user.isApproved ? 'approved' : 'pending'),
+    };
+
+    return res.json({ user: safeUser, token });
   } catch (err) {
-    console.error('🔥 loginUser error:', err);
-    return res.status(500).json({ message: 'Erro interno no servidor' });
+    console.error('[authController.login] erro:', err);
+    return res.status(500).json({ error: 'Erro ao efetuar login.' });
   }
 };

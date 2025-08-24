@@ -29,6 +29,8 @@ router.patch('/approve-user/:id', authorize('admin'), async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
     user.status = 'approved';
+    user.approved = true;       // compat com código antigo
+    user.isApproved = true;     // compat com variação de nome
     await user.save();
 
     // A lógica de e-mail foi removida para manter o controller limpo,
