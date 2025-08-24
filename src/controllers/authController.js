@@ -138,51 +138,49 @@ export const registerUser = async (req, res) => {
  */
 export const loginUser = async (req, res) => {
   try {
-    const { email, username, password } = req.body || {};
-    if ((!email && !username) || !password) {
+    const { email, username, matricula, password } = req.body || {};
+    if (!password || (!email && !username && !matricula)) {
       return res.status(400).json({ error: 'Credenciais inválidas.' });
     }
 
-    // aceita email OU username e baixa o case do email
-    const query = email
-      ? { email: String(email).toLowerCase() }
-      : { username: String(username) };
+    let user;
+    // Tenta encontrar o usuário por email, depois username, depois matrícula
+    if (email) {
+      user = await User.findOne({ institutionalEmail: String(email).toLowerCase() });
+    }
+    if (!user && username) {
+      user = await User.findOne({ username: String(username) });
+    }
+    if (!user && matricula) {
+      user = await User.findOne({ registration: String(matricula) });
+    }
 
-    const user = await User.findOne(query);
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
 
-    const ok = await bcrypt.compare(password, user.password || '');
-    if (!ok) return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
+    const isPasswordCorrect = await bcrypt.compare(password, user.password || '');
+    if (!isPasswordCorrect) {
+      return res.status(401).json({ error: 'Credenciais inválidas.' });
+    }
 
-    // ✅ Aprovação compatível com modelos antigos e novos
-    const statusVal = (user.status || '').toLowerCase();
-    const approved =
-      statusVal === 'approved' ||
-      statusVal === 'active'   ||       // se você usa 'active' em alguma migração
-      user.approved === true   ||
-      user.isApproved === true;
+    const status = (user.status || '').toLowerCase();
+    const isApproved = status === 'approved' || status === 'active' || user.approved === true || user.isApproved === true;
 
-    if (!approved) {
+    if (!isApproved) {
       return res.status(403).json({
         error: 'Sua conta está pendente. Aguarde até 24h para aprovação.'
       });
     }
 
-    const payload = {
-      id: user._id.toString(),
-      role: user.role,
-      name: user.name,
-      email: user.email,
-    };
-
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' });
+    const token = generateToken(user._id, user.role);
 
     const safeUser = {
       _id: user._id,
       name: user.name,
-      email: user.email,
+      email: user.institutionalEmail, // Garante que o email correto seja retornado
       role: user.role,
-      status: user.status || ((user.approved || user.isApproved) ? 'approved' : 'pending'),
+      status: user.status || (isApproved ? 'approved' : 'pending'),
     };
 
     return res.json({ user: safeUser, token });
