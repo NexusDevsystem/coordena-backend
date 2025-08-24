@@ -11,25 +11,38 @@ function isProfessorEmail(email = "") {
   return String(email).toLowerCase().endsWith("@professor.estacio.br");
 }
 
-// LOGIN: bloqueia pendente
+// LOGIN: robusto, com busca múltipla e verificação de status correta
 router.post("/login", async (req, res) => {
   try {
-    const { email, password, username } = req.body;
-    if (!password || (!email && !username)) {
-      return res.status(400).json({ error: "Informe usuário e senha." });
+    const { email, password, username, matricula } = req.body;
+    if (!password || (!email && !username && !matricula)) {
+      return res.status(400).json({ error: "Informe um identificador (email, usuário ou matrícula) e a senha." });
     }
 
     let user = null;
-    if (username) user = await User.findOne({ username: String(username).trim() });
-    if (!user && email) user = await User.findOne({ email: String(email).trim().toLowerCase() });
+    // Constrói a query para buscar por qualquer um dos identificadores
+    const queryOptions = { $or: [] };
+    if (email) queryOptions.$or.push({ email: String(email).trim().toLowerCase() });
+    if (username) queryOptions.$or.push({ username: String(username).trim() });
+    if (matricula) queryOptions.$or.push({ matricula: String(matricula).trim() });
+    
+    // Executa a busca se houver algum critério
+    if (queryOptions.$or.length > 0) {
+        user = await User.findOne(queryOptions).select('+password +status');
+    }
 
-    if (!user) return res.status(401).json({ error: "Usuário não encontrado." });
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: "Senha inválida." });
+    if (!valid) {
+      return res.status(401).json({ error: "Senha inválida." });
+    }
 
-    // 🔒 Bloqueia enquanto pendente
-    if (user.status !== "active") {
+    // 🔒 Bloqueia se não estiver aprovado/ativo
+    const status = (user.status || '').toLowerCase();
+    if (status !== "approved" && status !== "active") {
       return res.status(403).json({ error: "Sua conta está pendente. Aguarde até 24h para aprovação." });
     }
 
@@ -90,14 +103,14 @@ router.post("/register", async (req, res) => {
     const username = matricula;
     const hash = await bcrypt.hash(password, 10);
 
-    const role = isProfessorEmail(email) ? "professor" : "professor"; // default fica professor
+    const role = isProfessorEmail(email) ? "professor" : "student"; // Define 'student' como padrão
     const user = await User.create({
       name,
       email: email || undefined,
       matricula,
       username,
       password: hash,
-      role,                 // “professor” (ou mude aqui se quiser tratar aluno depois)
+      role,                 // 'student' ou 'professor'
       status: "pending",    // pendente até o admin aprovar
     });
 
