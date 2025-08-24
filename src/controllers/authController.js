@@ -143,6 +143,7 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ error: 'Credenciais inválidas.' });
     }
 
+    // aceita email OU username e baixa o case do email
     const query = email
       ? { email: String(email).toLowerCase() }
       : { username: String(username) };
@@ -153,10 +154,12 @@ export const loginUser = async (req, res) => {
     const ok = await bcrypt.compare(password, user.password || '');
     if (!ok) return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
 
-    // ✅ considera aprovado se QUALQUER uma das formas estiver marcada
+    // ✅ Aprovação compatível com modelos antigos e novos
+    const statusVal = (user.status || '').toLowerCase();
     const approved =
-      user.status === 'approved' ||
-      user.approved === true ||
+      statusVal === 'approved' ||
+      statusVal === 'active'   ||       // se você usa 'active' em alguma migração
+      user.approved === true   ||
       user.isApproved === true;
 
     if (!approved) {
@@ -171,6 +174,7 @@ export const loginUser = async (req, res) => {
       name: user.name,
       email: user.email,
     };
+
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' });
 
     const safeUser = {
@@ -183,7 +187,7 @@ export const loginUser = async (req, res) => {
 
     return res.json({ user: safeUser, token });
   } catch (err) {
-    console.error('[authController.login]', err);
+    console.error('[authController.login] erro:', err);
     return res.status(500).json({ error: 'Erro ao efetuar login.' });
   }
 };
