@@ -18,7 +18,12 @@ export default function authorize(allowedRoles = []) {
       req.user = decoded; // id, role, etc.
 
       if (allowedRoles.length > 0 && !allowedRoles.includes(decoded.role)) {
-        return res.status(403).json({ error: "Acesso negado" });
+        console.log(`[authorize] Acesso negado - Role do usuário: '${decoded.role}', Roles permitidas: [${allowedRoles.join(', ')}]`);
+        return res.status(403).json({ 
+          error: "Acesso negado", 
+          userRole: decoded.role, 
+          allowedRoles: allowedRoles 
+        });
       }
 
       return next();
