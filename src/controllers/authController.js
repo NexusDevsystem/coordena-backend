@@ -9,12 +9,18 @@ import { sendPushNotification } from '../config/webpush.js';
 // Regex institucional Estácio (alunos e professores)
 const estacioRegex = /^[\w.%+-]+@(alunos|professor)\.estacio\.br$/i;
 
-// Gera o JWT com payload { id, role }
-const generateToken = (id, role) => {
+// Gera o JWT com payload { id, role, name, username, email }
+const generateToken = (user) => {
   if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET não definido');
   }
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ 
+    id: user._id || user.id, 
+    role: user.role, 
+    name: user.name,
+    username: user.username,
+    email: user.email || null
+  }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 /**
@@ -60,7 +66,7 @@ export const registerUser = async (req, res) => {
       user.role         = role;
       await user.save();
 
-      const token = generateToken(user._id, user.role);
+      const token = generateToken(user);
       return res.json({
         _id:                user._id,
         name:               user.name,
@@ -108,7 +114,7 @@ export const registerUser = async (req, res) => {
     );
 
     // 8) retorna dados e token
-    const token = generateToken(newUser._id, newUser.role);
+    const token = generateToken(newUser);
     return res.status(201).json({
       _id:                newUser._id,
       name:               newUser.name,
@@ -187,7 +193,7 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: 'E-mail/usuário ou senha inválidos.' });
     }
 
-    const token = generateToken(matched._id, matched.role);
+    const token = generateToken(matched);
 
     const safeUser = {
       _id: matched._id,
