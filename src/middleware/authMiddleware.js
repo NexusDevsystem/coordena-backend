@@ -11,10 +11,19 @@ import User from '../models/User.js';
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
+  if (!token) {
+    return res.status(401).json({ error: 'Token não fornecido' });
+  }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
+    if (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expirado', expired: true });
+      } else if (err.name === 'JsonWebTokenError') {
+        return res.status(403).json({ error: 'Token inválido', invalid: true });
+      }
+      return res.status(403).json({ error: 'Erro na verificação do token' });
+    }
     req.user = user;
     next();
   });
