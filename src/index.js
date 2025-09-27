@@ -231,6 +231,7 @@ app.post(
       } = req.body;
 
       const newReservation = new Reservation({
+        user: req.user.id, // ← ID do usuário do token
         date,
         start,
         end,
