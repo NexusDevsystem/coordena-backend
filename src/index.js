@@ -10,6 +10,7 @@ import connectDB from "./config/db.js";
 
 // → NOVO: importe o router de Push Subscriptions
 import pushSubscriptionsRouter from "./routes/pushSubscriptions.js";
+import coordinatorRoutes from "./routes/coordinators.js";
 
 import Reservation from "./models/reservation.js";
 import authRoutes from "./routes/auth.js";
@@ -183,6 +184,7 @@ app.use("/api/auth", authRoutes);
 // ----------------------------------------
 app.use("/api/admin", adminRoutes);
 app.use("/api/push", pushSubscriptionsRouter);
+app.use("/api/coordinators", coordinatorRoutes);
 
 // ----------------------------------------
 // CRUD de RESERVATIONS (agora unificado no mesmo model “Reservation”)
@@ -667,6 +669,9 @@ app.get("/", (_req, res) => {
 
     // Garante admin
     await seedAdmin();
+
+    // Inicializa coordenadores
+    await seedCoordinators();
 
     // Sobe o servidor só depois da conexão + seed
     app.listen(PORT, () => {
