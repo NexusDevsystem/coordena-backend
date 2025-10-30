@@ -1,7 +1,8 @@
 // BACKEND/src/seeds/coordinatorsSeed.js
 import Coordinator from "../models/Coordinator.js";
 
-export const seedCoordinators = async () => {
+const seedCoordinators = async () => {
+  try {
   try {
     // Verificar se já existem coordenadores cadastrados
     const existingCoordinators = await Coordinator.countDocuments();
@@ -93,3 +94,5 @@ export const seedCoordinators = async () => {
     console.error("✗ Erro ao criar coordenadores iniciais:", error);
   }
 };
+
+export default seedCoordinators;

@@ -18,6 +18,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import { authenticateToken } from "./middleware/authMiddleware.js";
 import authorize from "./middleware/authorize.js"; // middleware de roles
 import User from "./models/User.js"; // Modelo de usuário (Mongoose)
+import seedCoordinators from "./seeds/coordinatorsSeed.js"; // Importar seed de coordenadores
 
 dotenv.config();
 
@@ -671,7 +672,11 @@ app.get("/", (_req, res) => {
     await seedAdmin();
 
     // Inicializa coordenadores
-    await seedCoordinators();
+    try {
+      await seedCoordinators();
+    } catch (error) {
+      console.warn("⚠️  Aviso: Não foi possível inicializar os coordenadores:", error.message);
+    }
 
     // Sobe o servidor só depois da conexão + seed
     app.listen(PORT, () => {
