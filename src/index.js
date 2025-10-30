@@ -5,6 +5,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 
+// → Importe o connectDB
+import connectDB from "./config/db.js";
+
 // → NOVO: importe o router de Push Subscriptions
 import pushSubscriptionsRouter from "./routes/pushSubscriptions.js";
 
@@ -172,6 +175,8 @@ app.use(express.json());
 // Rotas de autenticação (login, register, etc.)
 // ----------------------------------------
 app.use("/api/auth", authRoutes);
+
+
 
 // ----------------------------------------
 // Rotas do painel ADM (ex.: listar pendentes, aprovar, rejeitar) e Push
@@ -593,15 +598,8 @@ app.get("/", (_req, res) => {
 // ----------------------------------------
 (async () => {
   try {
-    if (!MONGO_URI) {
-      throw new Error("MONGO_URI não configurado no .env");
-    }
-
-    await mongoose.connect(MONGO_URI, {
-      dbName: "Coordena+",
-      autoIndex: true,
-    });
-    console.log("✅ Conectado ao MongoDB (Coordena+)");
+    // Usa o connectDB centralizado
+    await connectDB();
 
     // Sincroniza índices (ajuda quando alterou unique/sparse no schema)
     await User.syncIndexes().catch((e) => {

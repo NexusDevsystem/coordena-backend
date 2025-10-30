@@ -75,8 +75,8 @@ router.get('/pending-reservations', authorize('admin'), async (req, res) => {
   }
 });
 
-// Aprovar reserva
-router.patch('/approve-reservation/:id', authorize('admin'), async (req, res) => {
+// Aprovar reserva (admin ou professor)
+router.patch('/approve-reservation/:id', authorize(['admin', 'professor']), async (req, res) => {
   try {
     const r = await Reservation.findById(req.params.id);
     if (!r) return res.status(404).json({ error: 'Reserva não encontrada' });
@@ -91,8 +91,8 @@ router.patch('/approve-reservation/:id', authorize('admin'), async (req, res) =>
   }
 });
 
-// Rejeitar reserva
-router.patch('/reject-reservation/:id', authorize('admin'), async (req, res) => {
+// Rejeitar reserva (admin ou professor)
+router.patch('/reject-reservation/:id', authorize(['admin', 'professor']), async (req, res) => {
   try {
     const { reason } = req.body || {};
     const r = await Reservation.findById(req.params.id);
