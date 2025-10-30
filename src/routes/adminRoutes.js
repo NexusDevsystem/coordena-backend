@@ -109,4 +109,17 @@ router.patch('/reject-reservation/:id', authorize(['admin', 'professor']), async
   }
 });
 
+// Histórico de usuários (aprovados/rejeitados)
+router.get('/users-history', authorize('admin'), async (req, res) => {
+  try {
+    const history = await User.find({ 
+      status: { $in: ['approved', 'rejected'] } 
+    }).sort({ updatedAt: -1 });
+    return res.json(history);
+  } catch (err) {
+    console.error('[admin:get-users-history]', err);
+    return res.status(500).json({ error: 'Erro ao buscar histórico de usuários' });
+  }
+});
+
 export default router;
