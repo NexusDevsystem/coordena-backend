@@ -3,7 +3,6 @@ import Coordinator from "../models/Coordinator.js";
 
 const seedCoordinators = async () => {
   try {
-  try {
     // Verificar se já existem coordenadores cadastrados
     const existingCoordinators = await Coordinator.countDocuments();
     if (existingCoordinators > 0) {
