@@ -262,6 +262,49 @@ app.post(
   }
 );
 
+// PATCH → atualiza própria reserva (qualquer usuário autenticado, apenas suas reservas)
+app.patch(
+  "/api/reservations/:id",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const reservation = await Reservation.findById(req.params.id);
+      
+      if (!reservation) {
+        return res.status(404).json({ error: "Reserva não encontrada" });
+      }
+
+      // Verifica se é o dono da reserva ou admin/professor
+      const isOwner = reservation.responsible === req.user.name;
+      const isAdminOrProfessor = ['admin', 'professor'].includes(req.user.role);
+
+      if (!isOwner && !isAdminOrProfessor) {
+        return res.status(403).json({ 
+          error: "Você só pode atualizar suas próprias reservas" 
+        });
+      }
+
+      // Usuários comuns não podem mudar o status
+      if (!isAdminOrProfessor && req.body.status) {
+        delete req.body.status;
+      }
+
+      const updated = await Reservation.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true }
+      );
+      
+      return res.json(updated);
+    } catch (err) {
+      console.error("Erro ao atualizar reserva:", err);
+      return res
+        .status(400)
+        .json({ error: "Erro ao atualizar reserva", details: err.message });
+    }
+  }
+);
+
 // PUT → atualiza (apenas professor/admin pode mudar qualquer campo, inclusive status)
 app.put(
   "/api/reservations/:id",
@@ -286,16 +329,29 @@ app.put(
   }
 );
 
-// DELETE → exclui reserva (professor/admin)
+// DELETE → exclui reserva (qualquer usuário pode deletar suas próprias reservas)
 app.delete(
   "/api/reservations/:id",
   authenticateToken,
-  authorize("professor", "admin"),
   async (req, res) => {
     try {
-      const deleted = await Reservation.findByIdAndDelete(req.params.id);
-      if (!deleted)
+      const reservation = await Reservation.findById(req.params.id);
+      
+      if (!reservation) {
         return res.status(404).json({ error: "Reserva não encontrada" });
+      }
+
+      // Verifica se é o dono da reserva ou admin/professor
+      const isOwner = reservation.responsible === req.user.name;
+      const isAdminOrProfessor = ['admin', 'professor'].includes(req.user.role);
+
+      if (!isOwner && !isAdminOrProfessor) {
+        return res.status(403).json({ 
+          error: "Você só pode deletar suas próprias reservas" 
+        });
+      }
+
+      const deleted = await Reservation.findByIdAndDelete(req.params.id);
       return res.json({ message: "Reserva removida com sucesso" });
     } catch (err) {
       console.error("Erro ao deletar reserva:", err);
